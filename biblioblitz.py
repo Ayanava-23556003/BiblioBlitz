@@ -208,50 +208,19 @@ def _safe_filename(title: str, doi: str) -> str:
     return f"{t} [{d}].pdf"
 
 
-def run_download(
-    email: str,
-    download_dir: str,
-    keywords: str,
-    max_results: int,
-    year_from: int,
-    log_cb,          # callable(msg, tag="info")
-    stop_event,      # threading.Event
-):
-    """
-    Main download worker.
-    Steps: CrossRef search → Q1 filter → keyword filter →
-           Unpaywall OA check → download PDFs → CSV log.
-    """
-    os.makedirs(download_dir, exist_ok=True)
-
-    kw_parts = [k.strip() for k in re.split(r"[,;|]+", keywords) if k.strip()]
-    kw_pattern = "|".join(re.escape(k.lower()) for k in kw_parts)
-    query_str = " ".join(kw_parts)
-
-    log_cb(f"[INFO] Keywords     : {query_str}", "info")
-    log_cb(f"[INFO] Year from    : {year_from}  |  Max: {max_results}", "info")
-    log_cb(f"[INFO] Save folder  : {download_dir}", "info")
-    log_cb("─" * 55, "sep")
-
-    # ── STEP 1 — CrossRef ─────────────────────────────────────
-    log_cb("[STEP 1/4] Searching CrossRef API…", "step")
-    all_items = []
+def _search_crossref(query_str, year_from, max_results, email, log_cb, stop_event):
+    """Search CrossRef API."""
+    items = []
     offset = 0
-    batch_sz = 100
-
-    while len(all_items) < max_results:
+    while len(items) < max_results:
         if stop_event.is_set():
-            log_cb("[INFO] Stopped by user.", "warn")
-            return
-        to_fetch = min(batch_sz, max_results - len(all_items))
+            return items
+        to_fetch = min(100, max_results - len(items))
         res = _http_get_json(
             "https://api.crossref.org/works",
             params={
-                "query":  query_str,
-                "filter": f"from-pub-date:{year_from},type:journal-article",
-                "rows":   to_fetch,
-                "offset": offset,
-                "mailto": email,
+                "query": query_str, "filter": f"from-pub-date:{year_from},type:journal-article",
+                "rows": to_fetch, "offset": offset, "mailto": email,
                 "select": "DOI,title,published,container-title",
             }
         )
@@ -260,77 +229,324 @@ def run_download(
         batch = res["message"]["items"]
         if not batch:
             break
-        all_items.extend(batch)
-        log_cb(f"[INFO] Fetched {len(all_items)} papers so far…", "info")
+        items.extend(batch)
         offset += len(batch)
         time.sleep(0.4)
+    return items
 
-    log_cb(f"[INFO] CrossRef total fetched: {len(all_items)}", "info")
 
-    if not all_items:
-        log_cb("[ERROR] No results from CrossRef. Check keywords / internet.", "error")
-        return
+def _search_openalex(query_str, year_from, max_results, log_cb, stop_event):
+    """Search OpenAlex API."""
+    items = []
+    page = 1
+    per_page = 100
+    while len(items) < max_results:
+        if stop_event.is_set():
+            return items
+        res = _http_get_json(
+            "https://api.openalex.org/works",
+            params={
+                "search": query_str,
+                "filter": f"publication_year:>{year_from - 1},type:journal-article",
+                "per-page": min(per_page, max_results - len(items)),
+                "page": page,
+                "select": "doi,title,publication_year,primary_location,open_access",
+            }
+        )
+        if not res or not res.get("results"):
+            break
+        batch = res["results"]
+        if not batch:
+            break
+        # Normalise to common format
+        for r in batch:
+            doi = (r.get("doi") or "").replace("https://doi.org/", "")
+            title = (r.get("title") or "")
+            year = r.get("publication_year")
+            loc = r.get("primary_location") or {}
+            source = loc.get("source") or {}
+            journal = source.get("display_name", "")
+            oa_url = ""
+            oa = r.get("open_access") or {}
+            if oa.get("oa_url"):
+                oa_url = oa["oa_url"]
+            if doi and title:
+                items.append({
+                    "doi": doi, "title": title, "year": year,
+                    "journal": journal, "pdf_url": oa_url,
+                    "_source": "OpenAlex"
+                })
+        page += 1
+        time.sleep(0.3)
+    return items
 
-    # ── STEP 2 — Filter: Q1 journals + keyword in title ──────
-    log_cb("[STEP 2/4] Filtering: Q1 journals & keyword in title…", "step")
+
+def _search_semantic_scholar(query_str, year_from, max_results, log_cb, stop_event):
+    """Search Semantic Scholar API."""
+    items = []
+    offset = 0
+    limit = 100
+    while len(items) < max_results:
+        if stop_event.is_set():
+            return items
+        res = _http_get_json(
+            "https://api.semanticscholar.org/graph/v1/paper/search",
+            params={
+                "query": query_str,
+                "fields": "title,year,externalIds,venue,openAccessPdf",
+                "limit": min(limit, max_results - len(items)),
+                "offset": offset,
+            }
+        )
+        if not res or not res.get("data"):
+            break
+        for r in res["data"]:
+            doi = (r.get("externalIds") or {}).get("DOI", "")
+            title = r.get("title", "")
+            year = r.get("year")
+            journal = r.get("venue", "")
+            oa = r.get("openAccessPdf") or {}
+            pdf_url = oa.get("url", "")
+            if doi and title and (year is None or year >= year_from):
+                items.append({
+                    "doi": doi, "title": title, "year": year,
+                    "journal": journal, "pdf_url": pdf_url,
+                    "_source": "SemanticScholar"
+                })
+        offset += limit
+        time.sleep(0.5)
+    return items
+
+
+def _search_pubmed(query_str, year_from, max_results, log_cb, stop_event):
+    """Search PubMed/NCBI API."""
+    items = []
+    # Step 1: esearch to get IDs
+    search_res = _http_get_json(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+        params={
+            "db": "pubmed", "term": f"{query_str} AND {year_from}:{2025}[pdat]",
+            "retmax": min(max_results, 10000), "retmode": "json",
+            "usehistory": "y",
+        }
+    )
+    if not search_res:
+        return items
+    ids = search_res.get("esearchresult", {}).get("idlist", [])
+    if not ids:
+        return items
+    # Step 2: fetch summaries in batches
+    batch_size = 200
+    for i in range(0, min(len(ids), max_results), batch_size):
+        if stop_event.is_set():
+            return items
+        batch_ids = ids[i:i + batch_size]
+        summary = _http_get_json(
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+            params={"db": "pubmed", "id": ",".join(
+                batch_ids), "retmode": "json"}
+        )
+        if not summary:
+            continue
+        result = summary.get("result", {})
+        for uid in batch_ids:
+            rec = result.get(uid, {})
+            title = rec.get("title", "")
+            journal = rec.get("fulljournalname", "")
+            year = None
+            pubdate = rec.get("pubdate", "")
+            if pubdate:
+                try:
+                    year = int(pubdate[:4])
+                except Exception:
+                    pass
+            # Get DOI from articleids
+            doi = ""
+            for aid in rec.get("articleids", []):
+                if aid.get("idtype") == "doi":
+                    doi = aid.get("value", "")
+                    break
+            if title:
+                items.append({
+                    "doi": doi, "title": title, "year": year,
+                    "journal": journal, "pdf_url": "",
+                    "_source": "PubMed"
+                })
+        time.sleep(0.34)
+    return items
+
+
+def _search_core(query_str, year_from, max_results, log_cb, stop_event):
+    """Search CORE API for open-access papers."""
+    items = []
+    page = 1
+    per_page = 100
+    while len(items) < max_results:
+        if stop_event.is_set():
+            return items
+        res = _http_get_json(
+            "https://api.core.ac.uk/v3/search/works",
+            params={
+                "q": query_str,
+                "limit": min(per_page, max_results - len(items)),
+                "offset": (page - 1) * per_page,
+            }
+        )
+        if not res or not res.get("results"):
+            break
+        for r in res["results"]:
+            doi = r.get("doi", "") or ""
+            title = r.get("title", "") or ""
+            year = r.get("yearPublished")
+            journal = r.get("journals", [{}])[0].get(
+                "title", "") if r.get("journals") else ""
+            pdf_url = r.get("downloadUrl", "") or ""
+            if title and (year is None or year >= year_from):
+                items.append({
+                    "doi": doi, "title": title, "year": year,
+                    "journal": journal, "pdf_url": pdf_url,
+                    "_source": "CORE"
+                })
+        page += 1
+        time.sleep(0.4)
+    return items
+
+
+def run_download(
+    email, download_dir, keywords, max_results, year_from,
+    log_cb, stop_event,
+    use_crossref=True, use_openalex=True, use_semantic=True,
+    use_pubmed=True, use_core=True,
+):
+    os.makedirs(download_dir, exist_ok=True)
+    kw_parts = [k.strip() for k in re.split(r"[,;|]+", keywords) if k.strip()]
+    kw_pattern = "|".join(re.escape(k.lower()) for k in kw_parts)
+    query_str = " ".join(kw_parts)
+
+    log_cb(f"[INFO] Keywords  : {query_str}", "info")
+    log_cb(f"[INFO] Year from : {year_from}  |  Max: {max_results:,}", "info")
+    log_cb(f"[INFO] Save to   : {download_dir}", "info")
+    log_cb("─" * 55, "sep")
+
+    # ── STEP 1: Collect from all enabled sources ──────────────
+    all_raw = []
+
+    if use_crossref:
+        log_cb("[STEP] Searching CrossRef…", "step")
+        cr = _search_crossref(query_str, year_from,
+                              max_results, email, log_cb, stop_event)
+        # Normalise CrossRef format
+        for item in cr:
+            title = (item.get("title") or [""])[0]
+            ct_list = item.get("container-title") or []
+            journal = ct_list[0] if ct_list else ""
+            year = None
+            try:
+                year = item["published"]["date-parts"][0][0]
+            except Exception:
+                pass
+            all_raw.append({
+                "doi": item.get("DOI", ""), "title": title,
+                "year": year, "journal": journal,
+                "pdf_url": "", "_source": "CrossRef"
+            })
+        log_cb(f"[INFO] CrossRef: {len(cr)} results", "info")
+
+    if use_openalex and not stop_event.is_set():
+        log_cb("[STEP] Searching OpenAlex…", "step")
+        oa = _search_openalex(query_str, year_from,
+                              max_results, log_cb, stop_event)
+        all_raw.extend(oa)
+        log_cb(f"[INFO] OpenAlex: {len(oa)} results", "info")
+
+    if use_semantic and not stop_event.is_set():
+        log_cb("[STEP] Searching Semantic Scholar…", "step")
+        ss = _search_semantic_scholar(
+            query_str, year_from, max_results, log_cb, stop_event)
+        all_raw.extend(ss)
+        log_cb(f"[INFO] Semantic Scholar: {len(ss)} results", "info")
+
+    if use_pubmed and not stop_event.is_set():
+        log_cb("[STEP] Searching PubMed…", "step")
+        pm = _search_pubmed(query_str, year_from,
+                            max_results, log_cb, stop_event)
+        all_raw.extend(pm)
+        log_cb(f"[INFO] PubMed: {len(pm)} results", "info")
+
+    if use_core and not stop_event.is_set():
+        log_cb("[STEP] Searching CORE…", "step")
+        co = _search_core(query_str, year_from,
+                          max_results, log_cb, stop_event)
+        all_raw.extend(co)
+        log_cb(f"[INFO] CORE: {len(co)} results", "info")
+
+    log_cb(f"[INFO] Total raw results (all sources): {len(all_raw)}", "info")
+
+    # ── STEP 2: Deduplicate by DOI ────────────────────────────
+    log_cb("[STEP] Deduplicating…", "step")
+    seen_dois = {}
+    deduped = []
+    no_doi_items = []
+    for item in all_raw:
+        doi = (item.get("doi") or "").strip().lower()
+        if not doi:
+            no_doi_items.append(item)
+            continue
+        if doi not in seen_dois:
+            seen_dois[doi] = item
+            deduped.append(item)
+        else:
+            # Prefer item that already has a pdf_url
+            if item.get("pdf_url") and not seen_dois[doi].get("pdf_url"):
+                seen_dois[doi]["pdf_url"] = item["pdf_url"]
+    deduped.extend(no_doi_items)
+    log_cb(f"[INFO] After deduplication: {len(deduped)}", "info")
+
+    # ── STEP 3: Q1 + keyword filter ───────────────────────────
+    log_cb("[STEP] Filtering: Q1 journals & keywords…", "step")
     papers = []
-    for item in all_items:
-        title = (item.get("title") or [""])[0] if item.get("title") else ""
-        doi = item.get("DOI", "")
-        year = None
-        try:
-            year = item["published"]["date-parts"][0][0]
-        except Exception:
-            pass
-        ct_list = item.get("container-title") or []
-        ct = ct_list[0] if ct_list else ""
-
-        if not title or not doi:
+    for item in deduped:
+        if not item.get("title"):
             continue
-        if not is_q1_journal(ct):
+        if not is_q1_journal(item.get("journal", "")):
             continue
-        if kw_pattern and not re.search(kw_pattern, title.lower()):
+        if kw_pattern and not re.search(kw_pattern, item["title"].lower()):
             continue
-        papers.append({"doi": doi, "title": title,
-                      "year": year, "journal": ct})
-
-    log_cb(f"[INFO] Q1 + keyword filtered papers: {len(papers)}", "info")
+        papers.append(item)
+    log_cb(f"[INFO] Q1 + keyword filtered: {len(papers)}", "info")
 
     if not papers:
-        log_cb("[WARN] No papers passed the Q1 + keyword filter.", "warn")
-        log_cb(
-            "[HINT] Try broader keywords, or check if your topic has Q1 coverage.", "warn")
+        log_cb("[WARN] No papers passed Q1 + keyword filter.", "warn")
         return
 
-    # ── STEP 3 — Unpaywall OA check ───────────────────────────
-    log_cb("[STEP 3/4] Checking Unpaywall for open-access PDFs…", "step")
-    for i, p in enumerate(papers, 1):
+    # ── STEP 4: Unpaywall for missing PDF URLs ────────────────
+    log_cb("[STEP] Checking Unpaywall for missing PDF links…", "step")
+    missing = [p for p in papers if not p.get("pdf_url") and p.get("doi")]
+    log_cb(f"[INFO] Checking {len(missing)} papers on Unpaywall…", "info")
+    for i, p in enumerate(missing, 1):
         if stop_event.is_set():
-            log_cb("[INFO] Stopped by user.", "warn")
-            return
+            break
         enc_doi = urllib.parse.quote(p["doi"], safe="")
         data = _http_get_json(
             f"https://api.unpaywall.org/v2/{enc_doi}",
             params={"email": email}
         )
-        pdf_url = ""
         if data:
             loc = data.get("best_oa_location") or {}
-            pdf_url = loc.get("url_for_pdf") or loc.get("url") or ""
-        p["pdf_url"] = pdf_url
-        if i % 10 == 0 or i == len(papers):
-            log_cb(f"[INFO] Unpaywall checked: {i} / {len(papers)}", "info")
+            p["pdf_url"] = loc.get("url_for_pdf") or loc.get("url") or ""
+        if i % 10 == 0 or i == len(missing):
+            log_cb(f"[INFO] Unpaywall: {i}/{len(missing)}", "info")
         time.sleep(0.25)
 
     papers_oa = [p for p in papers if p.get("pdf_url")]
-    log_cb(f"[INFO] Papers with open-access PDF: {len(papers_oa)}", "info")
+    log_cb(f"[INFO] Papers with PDF URL: {len(papers_oa)}", "info")
 
     if not papers_oa:
-        log_cb("[WARN] No open-access PDFs found for the filtered papers.", "warn")
+        log_cb("[WARN] No open-access PDFs found.", "warn")
         return
 
-    # ── STEP 4 — Download PDFs ────────────────────────────────
-    log_cb("[STEP 4/4] Downloading PDFs…", "step")
+    # ── STEP 5: Download ──────────────────────────────────────
+    log_cb("[STEP] Downloading PDFs…", "step")
     n_ok = n_skip = n_err = 0
     log_rows = []
 
@@ -338,9 +554,9 @@ def run_download(
         if stop_event.is_set():
             log_cb("[INFO] Stopped by user.", "warn")
             break
-        fname = _safe_filename(p["title"], p["doi"])
+        fname = _safe_filename(p["title"], p.get("doi") or f"no-doi-{i}")
         fpath = os.path.join(download_dir, fname)
-        short = p["title"][:60]
+        short = p["title"][:55]
 
         if os.path.exists(fpath):
             status = "already_exists"
@@ -356,32 +572,30 @@ def run_download(
                 status = "error"
                 n_err += 1
                 log_cb(f"[FAIL]  [{i}/{len(papers_oa)}] {short}", "error")
+
         log_rows.append({
-            "title":   p["title"],
-            "doi":     p["doi"],
-            "year":    p.get("year", ""),
-            "journal": p.get("journal", ""),
-            "status":  status,
-            "file":    fname,
+            "title": p["title"], "doi": p.get("doi", ""),
+            "year": p.get("year", ""), "journal": p.get("journal", ""),
+            "source": p.get("_source", ""), "status": status, "file": fname,
         })
         time.sleep(0.5)
 
-    # ── Save CSV log ──────────────────────────────────────────
-    log_path = os.path.join(download_dir, "download_log.csv")
-    try:
-        with open(log_path, "w", newline="", encoding="utf-8") as fh:
-            writer = csv.DictWriter(fh, fieldnames=log_rows[0].keys())
-            writer.writeheader()
-            writer.writerows(log_rows)
-        log_cb(f"[LOG]   Report saved: {log_path}", "info")
-    except Exception as e:
-        log_cb(f"[WARN]  Could not save CSV log: {e}", "warn")
+    # Save CSV
+    if log_rows:
+        log_path = os.path.join(download_dir, "download_log.csv")
+        try:
+            with open(log_path, "w", newline="", encoding="utf-8") as fh:
+                writer = csv.DictWriter(fh, fieldnames=log_rows[0].keys())
+                writer.writeheader()
+                writer.writerows(log_rows)
+            log_cb(f"[LOG]   Report saved: {log_path}", "info")
+        except Exception as e:
+            log_cb(f"[WARN]  CSV save failed: {e}", "warn")
 
     log_cb("─" * 55, "sep")
     log_cb(
         f"[DONE]  Downloaded: {n_ok}  |  Skipped: {n_skip}  |  "
-        f"Errors: {n_err}  |  Total OA: {len(papers_oa)}",
-        "done"
+        f"Errors: {n_err}  |  Total OA: {len(papers_oa)}", "done"
     )
 
 
@@ -738,6 +952,41 @@ class BiblioBlitzApp(ctk.CTk):
                      font=ctk.CTkFont(size=9), text_color="#4B5563"
                      ).pack(anchor="e", padx=12, pady=(0, 10))
 
+        # ── Source toggles ───────────────────────────────────────────
+        ctk.CTkFrame(scroll, height=1, fg_color="#1E293B").pack(
+            fill="x", padx=12, pady=(6, 12)
+        )
+        ctk.CTkLabel(
+            scroll, text="🌐  Search Sources",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#93C5FD"
+        ).pack(anchor="w", padx=12)
+        ctk.CTkLabel(
+            scroll, text="Select which APIs to search:",
+            font=ctk.CTkFont(size=9), text_color="#4B5563"
+        ).pack(anchor="w", padx=12, pady=(2, 6))
+
+        self.v_crossref = ctk.BooleanVar(value=True)
+        self.v_openalex = ctk.BooleanVar(value=True)
+        self.v_semantic = ctk.BooleanVar(value=True)
+        self.v_pubmed = ctk.BooleanVar(value=True)
+        self.v_core = ctk.BooleanVar(value=True)
+
+        for label, var in [
+            ("CrossRef",         self.v_crossref),
+            ("OpenAlex",         self.v_openalex),
+            ("Semantic Scholar", self.v_semantic),
+            ("PubMed / NCBI",    self.v_pubmed),
+            ("CORE",             self.v_core),
+        ]:
+            ctk.CTkCheckBox(
+                scroll, text=label, variable=var,
+                font=ctk.CTkFont(size=11),
+                text_color="#CBD5E1",
+                fg_color="#2563EB", hover_color="#1D4ED8",
+                checkmark_color="#FFFFFF"
+            ).pack(anchor="w", padx=20, pady=3)
+
         # ── PDF Integrity Check ──────────────────────────────
         ctk.CTkFrame(scroll, height=1, fg_color="#1E293B").pack(
             fill="x", padx=12, pady=(6, 12)
@@ -1015,7 +1264,13 @@ class BiblioBlitzApp(ctk.CTk):
         threading.Thread(
             target=self._worker,
             kwargs={**params, "log_cb": self._append_log,
-                    "stop_event": self._stop_event},
+                    "stop_event": self._stop_event,
+                    "use_crossref": self.v_crossref.get(),
+                    "use_openalex": self.v_openalex.get(),
+                    "use_semantic": self.v_semantic.get(),
+                    "use_pubmed":   self.v_pubmed.get(),
+                    "use_core":     self.v_core.get(),
+                    },
             daemon=True
         ).start()
 
