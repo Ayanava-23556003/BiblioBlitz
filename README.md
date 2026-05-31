@@ -95,6 +95,18 @@ All sources are **free and official APIs** — no scraping, no ToS violations.
 - The `download_log.csv` in your download folder lists every paper with title, DOI, journal, year, source, and download status
 
 ---
+## Privacy
+
+BiblioBlitz does not collect, store, or transmit any personal data 
+beyond what is required by the APIs it uses:
+
+- Your **email address** is sent to CrossRef and Unpaywall as 
+  required by their fair-use policies. It is not stored by BiblioBlitz.
+- Your **keywords and search settings** are sent to the search APIs 
+  (CrossRef, OpenAlex, Semantic Scholar, PubMed, CORE) to retrieve results.
+- No data is ever sent to the BiblioBlitz developers or any third party.
+- No usage analytics or telemetry of any kind is collected.
+---
 
 ## Citation
 
