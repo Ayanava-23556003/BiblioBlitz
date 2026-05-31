@@ -1,7 +1,7 @@
 # BiblioBlitz v3.2
 ### Global Open-Access Academic Paper Downloader
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20466893.svg)](https://doi.org/10.5281/zenodo.20466893)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20469653.svg)](https://doi.org/10.5281/zenodo.20469653)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
 
@@ -128,7 +128,7 @@ BiblioBlitz is designed with user privacy in mind.
 
 If you use BiblioBlitz in your research, please cite:
 
-> Poddar, A. (2026). *BiblioBlitz v3.2 — Global Open-Access Academic Paper Downloader*. Zenodo. https://doi.org/10.5281/zenodo.20466893
+> Poddar, A. (2026). *BiblioBlitz v3.2 — Global Open-Access Academic Paper Downloader*. Zenodo. https://doi.org/10.5281/zenodo.20469653
 
 **BibTeX:**
 ```bibtex
@@ -138,8 +138,8 @@ If you use BiblioBlitz in your research, please cite:
   year      = {2026},
   publisher = {Zenodo},
   version   = {3.2},
-  doi       = {10.5281/zenodo.20466893},
-  url       = {https://doi.org/10.5281/zenodo.20466893}
+  doi       = {10.5281/zenodo.20469653},
+  url       = {https://doi.org/10.5281/zenodo.20469653}
 }
 ```
 
