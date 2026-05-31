@@ -1,73 +1,79 @@
 # BiblioBlitz v3.2
-### Q1 Open-Access Academic Paper Downloader
+### Global Open-Access Academic Paper Downloader
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20466893.svg)](https://doi.org/10.5281/zenodo.20466893)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20469595.svg)](https://doi.org/10.5281/zenodo.20469595)
+No installation required! Just download and run:
 
-No installation required! Just download the standalone executable and run it immediately:
-
-* **Step 1:** Download **[BiblioBlitz.exe](https://github.com/Ayanava-23556003/BiblioBlitz/releases/download/v3.2.0/BiblioBlitz.exe)**.
-* **Step 2:** Double-click the file to launch the graphical interface (no Python setup needed).
+* **Step 1:** Download **[BiblioBlitz.exe](https://github.com/Ayanava-23556003/BiblioBlitz/releases/download/v3.2.0/BiblioBlitz.exe)**
+* **Step 2:** Double-click to launch — no Python, no R, no setup needed
+* **Step 3:** Enter your email, keywords, select journals, and click **Start Download**
 
 ---
 
-## What's New in v3
+## What's New
 
-| Feature | v2 (PaperFinder) | v3 (BiblioBlitz) |
+### v3.2
+| Feature | Details |
+|---|---|
+| **Bug fixes** | Fixed NoneType crash on missing journal names |
+| **OpenAlex filter** | Corrected country-code filter for author affiliation |
+| **Taskbar icon** | Proper `.ico` support for Windows title bar and taskbar |
+| **Privacy notice** | Clear disclosure of API data usage |
+
+### v3.1 → v3.2 (from PaperFinder v2)
+| Feature | v2 (PaperFinder) | v3+ (BiblioBlitz) |
 |---|---|---|
 | App name | PaperFinder | **BiblioBlitz** |
 | Backend | R + PowerShell | **Pure Python** (no R needed) |
 | System requirement | Windows 64-bit | **Any OS, any arch** |
 | Max papers | 10,000 | **1,00,000** |
-| Journal filter | All journals | **Q1 only** (Nature, Science, EGU, AGU, Elsevier…) |
-| Search sources | CrossRef only | **5 APIs** (CrossRef, OpenAlex, Semantic Scholar, PubMed, CORE) |
+| Journal filter | Hardcoded Q1 list | **Live fetch — all journals worldwide** |
+| Journal selection | None | **Searchable multi-select dialog** |
+| Search sources | CrossRef only | **6 APIs** (CrossRef, OpenAlex, Semantic Scholar, PubMed, CORE, Unpaywall) |
+| Region filter | None | **80+ countries or Global** |
 | Input placeholders | Hard-coded defaults | **Smart placeholders** (auto-clear on type) |
-| Logo | File path dependent | **Always visible** (rendered in-app) |
-| Close confirmation | None | **Exit prompt** (warns if download is running) |
+| Logo | File path dependent | **Always visible** (bundled in EXE) |
+| Close confirmation | None | **Exit prompt** (warns if download running) |
 
 ---
 
 ## Requirements
 
-- **Python 3.9+** (only needed to build the EXE; end users need nothing)
-- Internet connection
+- **Python 3.9+** — only needed to **build** the EXE on your machine
+- End users need **nothing** — just the EXE file
+- Internet connection required at runtime
 
 ### To build the standalone EXE (Windows)
 ```
 double-click  build_exe.bat
 ```
-The output `dist\BiblioBlitz.exe` runs on **any Windows 10/11 PC** (32-bit or 64-bit) — no R, no Python, no extra setup.
-
----
-
-## Q1 Journal Coverage
-
-BiblioBlitz fetches papers **only from Q1-ranked journals**, including:
-
-- **Nature** family (Nature, Nature Climate Change, Nature Geoscience, Nature Water…)
-- **Science / AAAS** (Science, Science Advances)
-- **EGU / Copernicus** (HESS, NHESS, The Cryosphere, ACP, Biogeosciences…)
-- **AGU / Wiley** (GRL, JGR series, Water Resources Research…)
-- **Elsevier** (Journal of Hydrology, Advances in Water Resources, STOTEN, Catena, Geoderma, Geomorphology…)
-- **AMS** (Journal of Climate, Journal of Hydrometeorology…)
-- **Springer** (Climatic Change, Climate Dynamics, Hydrogeology Journal…)
-- **MDPI Q1** (Remote Sensing, Water, Atmosphere…)
+The output `dist\BiblioBlitz.exe` runs on **any Windows 10/11 PC** (32-bit or 64-bit).
 
 ---
 
 ## How It Works
 
-BiblioBlitz runs a 6-stage pipeline:
+BiblioBlitz runs a 7-stage pipeline:
 
-1. **Multi-source Search** — Queries up to 5 APIs simultaneously: CrossRef, OpenAlex, Semantic Scholar, PubMed/NCBI, and CORE
-2. **Deduplication** — Merges all results and removes duplicates by DOI
-3. **Q1 Filter** — Retains only papers from the 80+ whitelisted Q1 journal titles
-4. **Keyword Filter** — Retains only papers where the title matches your keywords
-5. **Unpaywall Check** — Resolves open-access PDF links for papers missing a direct URL
-6. **PDF Download** — Downloads PDFs and saves a `download_log.csv` summary
+1. **Fetch Journals** — queries CrossRef & OpenAlex with your keywords to build a live journal list
+2. **Select Journals** — searchable multi-select dialog; leave empty to search all journals
+3. **Multi-source Search** — queries 5 APIs simultaneously:
+   - CrossRef (150M+ works)
+   - OpenAlex (250M+ works)
+   - Semantic Scholar (200M+ papers)
+   - PubMed / NCBI (35M+ records)
+   - CORE (200M+ open-access documents)
+4. **Deduplication** — merges all results and removes duplicates by DOI
+5. **Journal + Keyword Filter** — retains only papers matching your selected journals and keywords
+6. **Unpaywall Check** — resolves open-access PDF links for papers missing a direct URL
+7. **PDF Download** — downloads PDFs and saves a `download_log.csv` summary
 
 ---
 
@@ -80,49 +86,60 @@ BiblioBlitz runs a 6-stage pipeline:
 | **Semantic Scholar** | 200M+ papers | AI-enriched metadata, interdisciplinary |
 | **PubMed / NCBI** | 35M+ records | Biomedical and environmental health |
 | **CORE** | 200M+ OA docs | Direct open-access PDF links |
-| **Unpaywall** | 50M+ OA links | Best-available PDF URL by DOI |
+| **Unpaywall** | 50M+ OA links | Best-available PDF URL resolution by DOI |
 
-All sources are **free and official APIs** — no scraping, no ToS violations.
+All sources are **free, official, and legal APIs** — no scraping, no Terms of Service violations.
+
+---
+
+## Region / Country Filter
+
+BiblioBlitz can filter papers by **author affiliation country**, including:
+India, China, United States, United Kingdom, Germany, France, Australia, Brazil, and 75+ more.
+
+Select **"Global (All Countries)"** to search without any geographic restriction.
 
 ---
 
 ## Tips
 
-- Use broad keywords (e.g. `hydrology, streamflow`) for more results
-- Enable all 5 sources for maximum coverage
-- Max 1,00,000 papers supported (large runs may take hours)
+- Enter keywords first, then click **"Fetch Journals"** to load the journal list
+- Select specific journals from the dialog, or leave unselected to use all journals
+- Use broad keywords (e.g. `soil erosion, runoff`) for more results
+- Max **1,00,000 papers** supported — large runs may take several hours
 - Use **Run PDF Integrity Check** after downloading to quarantine corrupt files
-- The `download_log.csv` in your download folder lists every paper with title, DOI, journal, year, source, and download status
+- The `download_log.csv` in your download folder lists every paper with title, DOI, journal, year, source, country filter, and download status
 
 ---
+
 ## Privacy
 
-BiblioBlitz does not collect, store, or transmit any personal data 
-beyond what is required by the APIs it uses:
+BiblioBlitz is designed with user privacy in mind.
 
-- Your **email address** is sent to CrossRef and Unpaywall as 
-  required by their fair-use policies. It is not stored by BiblioBlitz.
-- Your **keywords and search settings** are sent to the search APIs 
-  (CrossRef, OpenAlex, Semantic Scholar, PubMed, CORE) to retrieve results.
-- No data is ever sent to the BiblioBlitz developers or any third party.
-- No usage analytics or telemetry of any kind is collected.
+- Your **email address** is sent only to CrossRef and Unpaywall as required by their fair-use policies. It is **not stored** by BiblioBlitz anywhere.
+- Your **keywords, country, and journal selections** are sent to the search APIs to retrieve results. They are not stored or logged.
+- **No data is ever sent to the BiblioBlitz developers** or any third party beyond the APIs listed above.
+- **No usage analytics, telemetry, or tracking** of any kind is collected.
+- All processing happens **locally on your machine**.
+
 ---
 
 ## Citation
 
 If you use BiblioBlitz in your research, please cite:
 
-> Poddar, A. (2026). *BiblioBlitz v3.2 — Q1 Open-Access Academic Paper Downloader*. Zenodo. https://doi.org/10.5281/zenodo.20469595
+> Poddar, A. (2026). *BiblioBlitz v3.2 — Global Open-Access Academic Paper Downloader*. Zenodo. https://doi.org/10.5281/zenodo.20466893
 
 **BibTeX:**
 ```bibtex
 @software{biblioblitz2026,
   author    = {Poddar, Ayanava},
-  title     = {BiblioBlitz v3.2 — Q1 Open-Access Academic Paper Downloader},
+  title     = {BiblioBlitz — Global Open-Access Academic Paper Downloader},
   year      = {2026},
   publisher = {Zenodo},
-  doi       = {10.5281/zenodo.20469595},
-  url       = {https://doi.org/10.5281/zenodo.20469595}
+  version   = {3.2},
+  doi       = {10.5281/zenodo.20466893},
+  url       = {https://doi.org/10.5281/zenodo.20466893}
 }
 ```
 
@@ -131,3 +148,10 @@ If you use BiblioBlitz in your research, please cite:
 ## License
 
 MIT License — free to use, modify, and distribute with attribution.
+
+---
+
+## Acknowledgements
+
+BiblioBlitz uses the following free and open academic APIs:
+[CrossRef](https://www.crossref.org) · [OpenAlex](https://openalex.org) · [Semantic Scholar](https://www.semanticscholar.org) · [PubMed/NCBI](https://pubmed.ncbi.nlm.nih.gov) · [CORE](https://core.ac.uk) · [Unpaywall](https://unpaywall.org)

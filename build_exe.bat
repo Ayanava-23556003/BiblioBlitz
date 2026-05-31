@@ -1,7 +1,7 @@
 @echo off
 :: ============================================================
 ::  BiblioBlitz v3 — Build EXE
-::  Run this script to produce dist\BiblioBlitz.exe
+::  Run this script to produce dist\BiblioBlitz_v3.2.exe
 ::  Requires: Python 3.9+ with pip  (no R, no separate install)
 ::  Works on any Windows 10/11 PC (32-bit or 64-bit)
 :: ============================================================
@@ -15,7 +15,7 @@ echo   ██████╔╝██║██████╔╝██║     �
 echo   ██╔══██╗██║██╔══██╗██║     ██║██║   ██║██╔══██╗██║     ██║   ██║    ███╔╝
 echo   ██████╔╝██║██████╔╝███████╗██║╚██████╔╝██████╔╝███████╗██║   ██║   ███████╗
 echo   ╚═════╝ ╚═╝╚═════╝ ╚══════╝╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝
-echo                              Build Script  v3.0
+echo                              Build Script  v3.2
 echo.
 
 :: Check Python
@@ -52,7 +52,7 @@ echo [3/3] Running PyInstaller...
 pyinstaller ^
     --onefile ^
     --windowed ^
-    --name "BiblioBlitz" ^
+    --name "BiblioBlitz_v3.2" ^
     --icon NONE ^
     --add-data "C:\Users\ayanp\Downloads\BiblioBlitz_v3\BiblioBlitz_v3\biblioblitz.ico;." ^
     --hidden-import customtkinter ^
@@ -74,7 +74,7 @@ if errorlevel 1 (
 
 echo.
 echo ================================================================
-echo   BiblioBlitz.exe is ready in the  dist\  folder.
+echo   BiblioBlitz_v3.2.exe is ready in the  dist\  folder.
 echo.
 echo   You can copy it to ANY Windows PC (32-bit or 64-bit) and
 echo   run it immediately — no R, no Python, no extra installs.
@@ -82,7 +82,7 @@ echo   Internet connection required for searching and downloading.
 echo ================================================================
 echo.
 
-if exist "dist\BiblioBlitz.exe" (
+if exist "dist\BiblioBlitz_v3.2.exe" (
     explorer dist
 )
 
