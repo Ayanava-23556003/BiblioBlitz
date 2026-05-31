@@ -5,7 +5,7 @@
 
 ## Quick Start
 
-[(https://zenodo.org/badge/DOI/10.5281/zenodo.20466893.svg)](https://doi.org/10.5281/zenodo.20466893)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20466893.svg)](https://doi.org/10.5281/zenodo.20466893)
 
 No installation required! Just download the standalone executable and run it immediately:
 
