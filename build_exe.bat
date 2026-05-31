@@ -54,7 +54,7 @@ pyinstaller ^
     --windowed ^
     --name "BiblioBlitz" ^
     --icon NONE ^
-    --add-data "C:\Users\ayanp\Downloads\Gemini_Generated_Image_nsppmcnsppmcnspp.png;." ^
+    --add-data "C:\Users\ayanp\Downloads\BiblioBlitz_v3\BiblioBlitz_v3\biblioblitz.ico;." ^
     --hidden-import customtkinter ^
     --hidden-import tkinter ^
     --hidden-import tkinter.ttk ^
