@@ -1,4 +1,4 @@
-# BiblioBlitz v3.0
+# BiblioBlitz v3.1
 ### Q1 Open-Access Academic Paper Downloader
 
 ---
@@ -100,12 +100,12 @@ All sources are **free and official APIs** — no scraping, no ToS violations.
 
 If you use BiblioBlitz in your research, please cite:
 
-> Patra, A. (2026). *BiblioBlitz v3.0 — Q1 Open-Access Academic Paper Downloader*. Zenodo. https://doi.org/10.5281/zenodo.20466893
+> Poddar, A. (2026). *BiblioBlitz v3.0 — Q1 Open-Access Academic Paper Downloader*. Zenodo. https://doi.org/10.5281/zenodo.20466893
 
 **BibTeX:**
 ```bibtex
 @software{biblioblitz2026,
-  author    = {Patra, Ayanava},
+  author    = {Poddar, Ayanava},
   title     = {BiblioBlitz v3.0 — Q1 Open-Access Academic Paper Downloader},
   year      = {2026},
   publisher = {Zenodo},
