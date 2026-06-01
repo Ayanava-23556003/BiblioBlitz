@@ -12,14 +12,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import threading
-import os
-import sys
-import re
-import time
-import json
-import csv
-import urllib.request
-import urllib.parse
+import os, sys, re, time, json, csv, urllib.request, urllib.parse
 from pathlib import Path
 
 try:
@@ -28,27 +21,27 @@ try:
 except ImportError:
     _PIL_OK = False
 
-APP_NAME = "BiblioBlitz"
-APP_VER = "v4.0"
+APP_NAME    = "BiblioBlitz"
+APP_VER     = "v4.0"
 APP_TAGLINE = "Global Open-Access Academic Paper Downloader"
 
 # ── Country list for region filter ────────────────────────────
 COUNTRIES = [
     "Global (All Countries)",
-    "Afghanistan", "Albania", "Algeria", "Argentina", "Armenia", "Australia",
-    "Austria", "Azerbaijan", "Bangladesh", "Belarus", "Belgium", "Bolivia",
-    "Bosnia and Herzegovina", "Brazil", "Bulgaria", "Cambodia", "Canada",
-    "Chile", "China", "Colombia", "Croatia", "Cuba", "Czech Republic", "Denmark",
-    "Ecuador", "Egypt", "Estonia", "Ethiopia", "Finland", "France", "Georgia",
-    "Germany", "Ghana", "Greece", "Hungary", "India", "Indonesia", "Iran", "Iraq",
-    "Ireland", "Israel", "Italy", "Japan", "Jordan", "Kazakhstan", "Kenya",
-    "Latvia", "Lebanon", "Lithuania", "Malaysia", "Mexico", "Morocco", "Nepal",
-    "Netherlands", "New Zealand", "Nigeria", "Norway", "Pakistan", "Peru",
-    "Philippines", "Poland", "Portugal", "Romania", "Russia", "Saudi Arabia",
-    "Serbia", "Singapore", "Slovakia", "South Africa", "South Korea", "Spain",
-    "Sri Lanka", "Sudan", "Sweden", "Switzerland", "Taiwan", "Thailand", "Turkey",
-    "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom",
-    "United States", "Uzbekistan", "Venezuela", "Vietnam", "Zimbabwe",
+    "Afghanistan","Albania","Algeria","Argentina","Armenia","Australia",
+    "Austria","Azerbaijan","Bangladesh","Belarus","Belgium","Bolivia",
+    "Bosnia and Herzegovina","Brazil","Bulgaria","Cambodia","Canada",
+    "Chile","China","Colombia","Croatia","Cuba","Czech Republic","Denmark",
+    "Ecuador","Egypt","Estonia","Ethiopia","Finland","France","Georgia",
+    "Germany","Ghana","Greece","Hungary","India","Indonesia","Iran","Iraq",
+    "Ireland","Israel","Italy","Japan","Jordan","Kazakhstan","Kenya",
+    "Latvia","Lebanon","Lithuania","Malaysia","Mexico","Morocco","Nepal",
+    "Netherlands","New Zealand","Nigeria","Norway","Pakistan","Peru",
+    "Philippines","Poland","Portugal","Romania","Russia","Saudi Arabia",
+    "Serbia","Singapore","Slovakia","South Africa","South Korea","Spain",
+    "Sri Lanka","Sudan","Sweden","Switzerland","Taiwan","Thailand","Turkey",
+    "Uganda","Ukraine","United Arab Emirates","United Kingdom",
+    "United States","Uzbekistan","Venezuela","Vietnam","Zimbabwe",
 ]
 
 # ── Country → CrossRef/OpenAlex affiliation search strings ────
@@ -72,8 +65,6 @@ COUNTRY_CODES = {
 }
 
 # ── HTTP helpers ───────────────────────────────────────────────
-
-
 def _http_get_json(url, params=None, timeout=20):
     if params:
         url = url + "?" + urllib.parse.urlencode(
@@ -86,28 +77,23 @@ def _http_get_json(url, params=None, timeout=20):
     except Exception:
         return None
 
-
 def _download_file(url, dest_path, email):
     req = urllib.request.Request(url, headers={
         "User-Agent": f"BiblioBlitz/4.0 ({email})",
         "Accept": "application/pdf,*/*"})
     try:
         with urllib.request.urlopen(req, timeout=40) as r, \
-                open(dest_path, "wb") as fh:
+             open(dest_path, "wb") as fh:
             while True:
                 chunk = r.read(65536)
-                if not chunk:
-                    break
+                if not chunk: break
                 fh.write(chunk)
         return True
     except Exception:
         if os.path.exists(dest_path):
-            try:
-                os.remove(dest_path)
-            except:
-                pass
+            try: os.remove(dest_path)
+            except: pass
         return False
-
 
 def _safe_filename(title, doi):
     t = re.sub(r"[^\w\s-]", "_", title)
@@ -116,15 +102,12 @@ def _safe_filename(title, doi):
     return f"{t} [{d}].pdf"
 
 # ── Fetch journals live from CrossRef for given keywords ───────
-
-
 def fetch_journals_for_keywords(keywords, log_cb=None):
     """
     Query CrossRef with keywords, collect unique journal names.
     Returns sorted list of journal names.
     """
-    kw = " ".join(k.strip()
-                  for k in re.split(r"[,;|]+", keywords) if k.strip())
+    kw = " ".join(k.strip() for k in re.split(r"[,;|]+", keywords) if k.strip())
     journals = set()
     offset = 0
     fetched = 0
@@ -154,8 +137,7 @@ def fetch_journals_for_keywords(keywords, log_cb=None):
         offset += len(items)
         time.sleep(0.3)
         if log_cb:
-            log_cb(
-                f"[INFO] Fetched {fetched} records for journal list…", "info")
+            log_cb(f"[INFO] Fetched {fetched} records for journal list…", "info")
 
     # Also query OpenAlex for more journals
     try:
@@ -189,13 +171,12 @@ def run_download(
     log_cb, stop_event,
 ):
     os.makedirs(download_dir, exist_ok=True)
-    kw_parts = [k.strip() for k in re.split(r"[,;|]+", keywords) if k.strip()]
+    kw_parts   = [k.strip() for k in re.split(r"[,;|]+", keywords) if k.strip()]
     kw_pattern = "|".join(re.escape(k.lower()) for k in kw_parts)
-    query_str = " ".join(kw_parts)
+    query_str  = " ".join(kw_parts)
 
     # Build journal filter set (lower-cased)
-    journal_filter = {j.lower()
-                      for j in selected_journals} if selected_journals else set()
+    journal_filter = {j.lower() for j in selected_journals} if selected_journals else set()
 
     # Country filter string
     country_str = ""
@@ -205,8 +186,7 @@ def run_download(
     log_cb(f"[INFO] Keywords   : {query_str}", "info")
     log_cb(f"[INFO] Year from  : {year_from}  |  Max: {max_results:,}", "info")
     log_cb(f"[INFO] Country    : {country or 'Global'}", "info")
-    log_cb(
-        f"[INFO] Journals   : {len(journal_filter) if journal_filter else 'All'}", "info")
+    log_cb(f"[INFO] Journals   : {len(journal_filter) if journal_filter else 'All'}", "info")
     log_cb(f"[INFO] Save to    : {download_dir}", "info")
     log_cb("─" * 55, "sep")
 
@@ -219,8 +199,7 @@ def run_download(
         cr_query = f"{query_str} {country_str}"
 
     while len(all_items) < max_results:
-        if stop_event.is_set():
-            break
+        if stop_event.is_set(): break
         to_fetch = min(100, max_results - len(all_items))
         res = _http_get_json(
             "https://api.crossref.org/works",
@@ -234,18 +213,15 @@ def run_download(
         if not res or not res.get("message") or not res["message"].get("items"):
             break
         batch = res["message"]["items"]
-        if not batch:
-            break
+        if not batch: break
         # Normalise
         for item in batch:
             title = (item.get("title") or [""])[0]
-            doi = item.get("DOI", "")
-            ct = (item.get("container-title") or [""])[0]
-            year = None
-            try:
-                year = item["published"]["date-parts"][0][0]
-            except:
-                pass
+            doi   = item.get("DOI", "")
+            ct    = (item.get("container-title") or [""])[0]
+            year  = None
+            try: year = item["published"]["date-parts"][0][0]
+            except: pass
             if title and doi:
                 all_items.append({
                     "doi": doi, "title": title, "year": year,
@@ -260,11 +236,10 @@ def run_download(
     oa_items = []
     oa_filter = f"publication_year:>{year_from-1},type:journal-article"
     if country_str:
-        oa_filter += f",authorships.institutions.country_code:{country_str[:2].upper()}"
+        oa_filter += f",institutions.country_code:{country_str[:2].upper()}"
     page = 1
     while len(oa_items) < max_results:
-        if stop_event.is_set():
-            break
+        if stop_event.is_set(): break
         res = _http_get_json(
             "https://api.openalex.org/works",
             params={
@@ -274,17 +249,15 @@ def run_download(
                 "select": "doi,title,publication_year,primary_location,open_access",
             }
         )
-        if not res or not res.get("results"):
-            break
+        if not res or not res.get("results"): break
         batch = res["results"]
-        if not batch:
-            break
+        if not batch: break
         for r in batch:
-            doi = (r.get("doi") or "").replace("https://doi.org/", "")
+            doi   = (r.get("doi") or "").replace("https://doi.org/", "")
             title = r.get("title") or ""
-            year = r.get("publication_year")
-            loc = r.get("primary_location") or {}
-            src = loc.get("source") or {}
+            year  = r.get("publication_year")
+            loc   = r.get("primary_location") or {}
+            src   = loc.get("source") or {}
             journal = src.get("display_name", "")
             oa_url = (r.get("open_access") or {}).get("oa_url", "")
             if doi and title:
@@ -302,8 +275,7 @@ def run_download(
     ss_items = []
     ss_offset = 0
     while len(ss_items) < min(max_results, 1000):
-        if stop_event.is_set():
-            break
+        if stop_event.is_set(): break
         res = _http_get_json(
             "https://api.semanticscholar.org/graph/v1/paper/search",
             params={
@@ -313,15 +285,14 @@ def run_download(
                 "offset": ss_offset,
             }
         )
-        if not res or not res.get("data"):
-            break
+        if not res or not res.get("data"): break
         for r in res["data"]:
-            doi = (r.get("externalIds") or {}).get("DOI", "")
-            title = r.get("title", "")
-            year = r.get("year")
-            journal = r.get("venue", "")
-            oa = r.get("openAccessPdf") or {}
-            pdf_url = oa.get("url", "")
+            doi    = (r.get("externalIds") or {}).get("DOI", "")
+            title  = r.get("title", "")
+            year   = r.get("year")
+            journal= r.get("venue", "")
+            oa     = r.get("openAccessPdf") or {}
+            pdf_url= oa.get("url", "")
             if title and (year is None or year >= year_from):
                 ss_items.append({
                     "doi": doi, "title": title, "year": year,
@@ -346,30 +317,24 @@ def run_download(
     if s:
         ids = s.get("esearchresult", {}).get("idlist", [])
         for i in range(0, min(len(ids), max_results), 200):
-            if stop_event.is_set():
-                break
+            if stop_event.is_set(): break
             summ = _http_get_json(
                 "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
-                params={"db": "pubmed", "id": ",".join(
-                    ids[i:i+200]), "retmode": "json"}
+                params={"db": "pubmed", "id": ",".join(ids[i:i+200]), "retmode": "json"}
             )
-            if not summ:
-                continue
+            if not summ: continue
             result = summ.get("result", {})
             for uid in ids[i:i+200]:
                 rec = result.get(uid, {})
-                title = rec.get("title", "")
+                title   = rec.get("title", "")
                 journal = rec.get("fulljournalname", "")
-                year = None
-                try:
-                    year = int(rec.get("pubdate", "")[:4])
-                except:
-                    pass
+                year    = None
+                try: year = int(rec.get("pubdate", "")[:4])
+                except: pass
                 doi = ""
                 for aid in rec.get("articleids", []):
                     if aid.get("idtype") == "doi":
-                        doi = aid.get("value", "")
-                        break
+                        doi = aid.get("value", ""); break
                 if title:
                     pm_items.append({
                         "doi": doi, "title": title, "year": year,
@@ -384,23 +349,21 @@ def run_download(
     core_q = query_str + (f" {country_str}" if country_str else "")
     c_page = 1
     while len(core_items) < min(max_results, 500):
-        if stop_event.is_set():
-            break
+        if stop_event.is_set(): break
         res = _http_get_json(
             "https://api.core.ac.uk/v3/search/works",
             params={"q": core_q,
                     "limit": min(100, max_results - len(core_items)),
                     "offset": (c_page-1)*100}
         )
-        if not res or not res.get("results"):
-            break
+        if not res or not res.get("results"): break
         for r in res["results"]:
-            doi = r.get("doi", "") or ""
-            title = r.get("title", "") or ""
-            year = r.get("yearPublished")
-            jlist = r.get("journals") or [{}]
-            journal = jlist[0].get("title", "") if jlist else ""
-            pdf_url = r.get("downloadUrl", "") or ""
+            doi    = r.get("doi", "") or ""
+            title  = r.get("title", "") or ""
+            year   = r.get("yearPublished")
+            jlist  = r.get("journals") or [{}]
+            journal= jlist[0].get("title", "") if jlist else ""
+            pdf_url= r.get("downloadUrl", "") or ""
             if title and (year is None or year >= year_from):
                 core_items.append({
                     "doi": doi, "title": title, "year": year,
@@ -418,11 +381,9 @@ def run_download(
     for item in all_raw:
         doi = (item.get("doi") or "").strip().lower()
         if not doi:
-            deduped.append(item)
-            continue
+            deduped.append(item); continue
         if doi not in seen:
-            seen[doi] = item
-            deduped.append(item)
+            seen[doi] = item; deduped.append(item)
         else:
             if item.get("pdf_url") and not seen[doi].get("pdf_url"):
                 seen[doi]["pdf_url"] = item["pdf_url"]
@@ -431,8 +392,6 @@ def run_download(
     # ── Journal filter ────────────────────────────────────────
     if journal_filter:
         def _jmatch(j):
-            if not j:
-                return False
             jl = j.lower()
             for f in journal_filter:
                 if f in jl or jl in f:
@@ -446,20 +405,18 @@ def run_download(
     # Keyword filter on title
     if kw_pattern:
         papers = [p for p in papers if p.get("title") and
-                  re.search(kw_pattern, (p["title"] or "").lower())]
+                  re.search(kw_pattern, p["title"].lower())]
     log_cb(f"[INFO] After keyword filter: {len(papers)}", "info")
 
     if not papers:
-        log_cb(
-            "[WARN] No papers matched. Try broader keywords or select more journals.", "warn")
+        log_cb("[WARN] No papers matched. Try broader keywords or select more journals.", "warn")
         return
 
     # ── Unpaywall supplement ──────────────────────────────────
     need_oa = [p for p in papers if not p.get("pdf_url") and p.get("doi")]
     log_cb(f"[INFO] Checking Unpaywall for {len(need_oa)} papers…", "info")
     for i, p in enumerate(need_oa, 1):
-        if stop_event.is_set():
-            break
+        if stop_event.is_set(): break
         enc = urllib.parse.quote(p["doi"], safe="")
         data = _http_get_json(f"https://api.unpaywall.org/v2/{enc}",
                               params={"email": email})
@@ -484,30 +441,26 @@ def run_download(
 
     for i, p in enumerate(papers_oa, 1):
         if stop_event.is_set():
-            log_cb("[INFO] Stopped by user.", "warn")
-            break
+            log_cb("[INFO] Stopped by user.", "warn"); break
         fname = _safe_filename(p["title"], p.get("doi") or f"no-doi-{i}")
         fpath = os.path.join(download_dir, fname)
         short = p["title"][:55]
         if os.path.exists(fpath):
-            status = "already_exists"
-            n_skip += 1
+            status = "already_exists"; n_skip += 1
             log_cb(f"[SKIP]  [{i}/{len(papers_oa)}] {short}", "warn")
         else:
             ok = _download_file(p["pdf_url"], fpath, email)
             if ok:
-                status = "success"
-                n_ok += 1
+                status = "success"; n_ok += 1
                 log_cb(f"[OK]    [{i}/{len(papers_oa)}] {short}", "success")
             else:
-                status = "error"
-                n_err += 1
+                status = "error"; n_err += 1
                 log_cb(f"[FAIL]  [{i}/{len(papers_oa)}] {short}", "error")
         log_rows.append({
-            "title": p["title"], "doi": p.get("doi", ""),
-            "year": p.get("year", ""), "journal": p.get("journal", ""),
+            "title": p["title"], "doi": p.get("doi",""),
+            "year": p.get("year",""), "journal": p.get("journal",""),
             "country_filter": country or "Global",
-            "source": p.get("_source", ""), "status": status, "file": fname,
+            "source": p.get("_source",""), "status": status, "file": fname,
         })
         time.sleep(0.5)
 
@@ -516,15 +469,13 @@ def run_download(
         try:
             with open(log_path, "w", newline="", encoding="utf-8") as fh:
                 w = csv.DictWriter(fh, fieldnames=log_rows[0].keys())
-                w.writeheader()
-                w.writerows(log_rows)
+                w.writeheader(); w.writerows(log_rows)
             log_cb(f"[LOG]   Saved: {log_path}", "info")
         except Exception as e:
             log_cb(f"[WARN]  CSV error: {e}", "warn")
 
     log_cb("─" * 55, "sep")
-    log_cb(
-        f"[DONE]  Downloaded: {n_ok}  |  Skipped: {n_skip}  |  Errors: {n_err}", "done")
+    log_cb(f"[DONE]  Downloaded: {n_ok}  |  Skipped: {n_skip}  |  Errors: {n_err}", "done")
 
 
 def run_pdf_integrity_check(folder, log_cb, stop_event):
@@ -535,21 +486,17 @@ def run_pdf_integrity_check(folder, log_cb, stop_event):
     ok_count = bad_count = 0
     results = []
     for fname in pdfs:
-        if stop_event.is_set():
-            break
+        if stop_event.is_set(): break
         fpath = os.path.join(folder, fname)
         status = "OK"
         try:
             with open(fpath, "rb") as fh:
                 hdr = fh.read(8)
-            if len(hdr) < 4:
-                status = "TooSmall"
-            elif hdr[:4] != b"%PDF":
-                status = "InvalidHeader"
+            if len(hdr) < 4: status = "TooSmall"
+            elif hdr[:4] != b"%PDF": status = "InvalidHeader"
         except Exception as e:
             status = f"CannotOpen:{e}"
-        size_mb = round(os.path.getsize(fpath)/(1024*1024),
-                        3) if os.path.exists(fpath) else 0
+        size_mb = round(os.path.getsize(fpath)/(1024*1024), 3) if os.path.exists(fpath) else 0
         if status == "OK":
             ok_count += 1
             log_cb(f"[OK]    {fname}", "success")
@@ -558,8 +505,7 @@ def run_pdf_integrity_check(folder, log_cb, stop_event):
             c = 1
             while os.path.exists(dest):
                 base, ext = os.path.splitext(fname)
-                dest = os.path.join(bad_folder, f"{base}_dup{c}{ext}")
-                c += 1
+                dest = os.path.join(bad_folder, f"{base}_dup{c}{ext}"); c += 1
             try:
                 os.replace(fpath, dest)
                 log_cb(f"[MOVED] {fname} → {status}", "warn")
@@ -567,14 +513,12 @@ def run_pdf_integrity_check(folder, log_cb, stop_event):
                 log_cb(f"[ERROR] {fname}: {e}", "error")
                 status = f"MoveError:{status}"
             bad_count += 1
-        results.append(
-            {"FileName": fname, "Status": status, "SizeMB": size_mb})
+        results.append({"FileName": fname, "Status": status, "SizeMB": size_mb})
     try:
         rp = os.path.join(folder, "pdf_integrity_report.csv")
         with open(rp, "w", newline="", encoding="utf-8") as fh:
-            w = csv.DictWriter(fh, fieldnames=["FileName", "Status", "SizeMB"])
-            w.writeheader()
-            w.writerows(results)
+            w = csv.DictWriter(fh, fieldnames=["FileName","Status","SizeMB"])
+            w.writeheader(); w.writerows(results)
         log_cb(f"[REPORT] {rp}", "info")
     except Exception as e:
         log_cb(f"[WARN] {e}", "warn")
@@ -583,32 +527,23 @@ def run_pdf_integrity_check(folder, log_cb, stop_event):
 
 # ── Placeholder helper ─────────────────────────────────────────
 def _add_placeholder(entry, placeholder, ph_color="#4B5563", act_color="#CBD5E1"):
-    entry._ph_text = placeholder
+    entry._ph_text  = placeholder
     entry._ph_color = ph_color
-    entry._act_color = act_color
-
+    entry._act_color= act_color
     def _show():
         entry.configure(text_color=ph_color)
-        if not entry.get():
-            entry.insert(0, placeholder)
-
+        if not entry.get(): entry.insert(0, placeholder)
     def _hide(e=None):
-        if entry.get() == placeholder:
-            entry.delete(0, "end")
+        if entry.get() == placeholder: entry.delete(0,"end")
         entry.configure(text_color=act_color)
-
     def _leave(e=None):
-        if not entry.get():
-            _show()
-
+        if not entry.get(): _show()
     def _key(e=None):
-        if entry.cget("text_color") == ph_color:
-            _hide()
+        if entry.cget("text_color") == ph_color: _hide()
     _show()
     entry.bind("<FocusIn>",  _hide)
     entry.bind("<FocusOut>", _leave)
     entry.bind("<Key>",      _key)
-
 
 def _get_val(entry):
     v = entry.get().strip()
@@ -624,7 +559,6 @@ class JournalSelectorDialog(ctk.CTkToplevel):
     Modal dialog showing all fetched journals as a searchable
     multi-select checklist. Returns selected journal names.
     """
-
     def __init__(self, parent, journals):
         super().__init__(parent)
         self.title("Select Journals")
@@ -634,9 +568,9 @@ class JournalSelectorDialog(ctk.CTkToplevel):
         self.focus_set()
 
         self._all_journals = journals
-        self._vars = {}   # journal → BooleanVar
-        self._selected = []
-        self._filtered = list(journals)
+        self._vars         = {}   # journal → BooleanVar
+        self._selected     = []
+        self._filtered     = list(journals)
 
         self._build()
 
@@ -647,7 +581,7 @@ class JournalSelectorDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(top, text="🔍 Filter journals:",
                      font=ctk.CTkFont(size=11), text_color="#CBD5E1"
-                     ).pack(side="left", padx=(0, 8))
+                     ).pack(side="left", padx=(0,8))
 
         self._search_var = tk.StringVar()
         self._search_var.trace_add("write", self._on_search)
@@ -663,15 +597,15 @@ class JournalSelectorDialog(ctk.CTkToplevel):
         ctk.CTkButton(btn_row, text="Select All", width=100, height=28,
                       fg_color="#1E3A5F", hover_color="#2563EB",
                       font=ctk.CTkFont(size=10),
-                      command=self._select_all).pack(side="left", padx=(0, 6))
+                      command=self._select_all).pack(side="left", padx=(0,6))
         ctk.CTkButton(btn_row, text="Deselect All", width=100, height=28,
                       fg_color="#1E293B", hover_color="#334155",
                       font=ctk.CTkFont(size=10),
                       command=self._deselect_all).pack(side="left")
 
         self._count_lbl = ctk.CTkLabel(btn_row, text="",
-                                       font=ctk.CTkFont(size=10),
-                                       text_color="#4B5563")
+                                        font=ctk.CTkFont(size=10),
+                                        text_color="#4B5563")
         self._count_lbl.pack(side="right")
 
         # Scrollable checklist
@@ -682,12 +616,12 @@ class JournalSelectorDialog(ctk.CTkToplevel):
 
         # Bottom buttons
         bf = ctk.CTkFrame(self, fg_color="transparent")
-        bf.pack(fill="x", padx=14, pady=(0, 12))
+        bf.pack(fill="x", padx=14, pady=(0,12))
 
         ctk.CTkButton(bf, text="✔  Confirm Selection", height=36,
                       fg_color="#2563EB", hover_color="#1D4ED8",
                       font=ctk.CTkFont(size=12, weight="bold"),
-                      command=self._confirm).pack(side="left", fill="x", expand=True, padx=(0, 6))
+                      command=self._confirm).pack(side="left", fill="x", expand=True, padx=(0,6))
         ctk.CTkButton(bf, text="✖  Cancel", height=36, width=90,
                       fg_color="#450A0A", hover_color="#7F1D1D",
                       font=ctk.CTkFont(size=12),
@@ -721,14 +655,12 @@ class JournalSelectorDialog(ctk.CTkToplevel):
 
     def _select_all(self):
         for j in self._filtered:
-            if j in self._vars:
-                self._vars[j].set(True)
+            if j in self._vars: self._vars[j].set(True)
         self._update_count()
 
     def _deselect_all(self):
         for j in self._filtered:
-            if j in self._vars:
-                self._vars[j].set(False)
+            if j in self._vars: self._vars[j].set(False)
         self._update_count()
 
     def _update_count(self):
@@ -753,37 +685,30 @@ class BiblioBlitzApp(ctk.CTk):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         self.title(f"{APP_NAME}  ·  {APP_TAGLINE}")
+        icon_path = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__))), 'biblioblitz.ico')
+        if os.path.exists(icon_path):
+            self.iconbitmap(icon_path)
         self.geometry("1100x800")
         self.minsize(900, 680)
 
-        self._running = False
-        self._stop_event = threading.Event()
-        self._log_lines = 0
+        self._running       = False
+        self._stop_event    = threading.Event()
+        self._log_lines     = 0
         self._selected_journals = []   # user-chosen journal list
-        self._fetched_journals = []   # fetched from APIs
+        self._fetched_journals  = []   # fetched from APIs
 
         self._build_ui()
-        try:
-            base = getattr(sys, "_MEIPASS", os.path.dirname(
-                os.path.abspath(__file__)))
-            ico_path = os.path.join(base, "biblioblitz.ico")
-            if not os.path.isfile(ico_path):
-                ico_path = r"C:\Users\ayanp\Downloads\BiblioBlitz_v3\BiblioBlitz_v3\biblioblitz.ico"
-            if os.path.isfile(ico_path):
-                self.iconbitmap(ico_path)
-        except Exception:
-            pass
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _on_close(self):
         if self._running:
             if not messagebox.askyesno("Download Running",
-                                       "A download is running. Stop and exit BiblioBlitz?"):
+                "A download is running. Stop and exit BiblioBlitz?"):
                 return
             self._stop_event.set()
         else:
             if not messagebox.askyesno("Exit BiblioBlitz",
-                                       "Are you sure you want to close BiblioBlitz?"):
+                "Are you sure you want to close BiblioBlitz?"):
                 return
         self.destroy()
 
@@ -794,8 +719,7 @@ class BiblioBlitzApp(ctk.CTk):
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=12, pady=(10, 0))
 
-        left = ctk.CTkFrame(
-            body, width=370, fg_color="#111827", corner_radius=10)
+        left = ctk.CTkFrame(body, width=370, fg_color="#111827", corner_radius=10)
         left.pack(side="left", fill="y", padx=(0, 8))
         left.pack_propagate(False)
         self._build_config_panel(left)
@@ -807,8 +731,7 @@ class BiblioBlitzApp(ctk.CTk):
         self._build_footer()
 
     def _build_header(self):
-        hdr = ctk.CTkFrame(self, fg_color="#0B1628",
-                           corner_radius=0, height=68)
+        hdr = ctk.CTkFrame(self, fg_color="#0B1628", corner_radius=0, height=68)
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
 
@@ -819,9 +742,7 @@ class BiblioBlitzApp(ctk.CTk):
                 base = getattr(sys, "_MEIPASS",
                                os.path.dirname(os.path.abspath(__file__)))
                 candidates = [
-                    os.path.join(
-                        base, "biblioblitz.png"),
-                    r"C:\Users\ayanp\Downloads\biblioblitz.png",
+                    os.path.join(base, "biblioblitz.png"),
                 ]
                 for logo_path in candidates:
                     if os.path.isfile(logo_path):
@@ -884,16 +805,16 @@ class BiblioBlitzApp(ctk.CTk):
                      ).pack(fill="x", padx=16, pady=(0, 8))
 
         scroll = ctk.CTkScrollableFrame(parent, fg_color="transparent",
-                                        scrollbar_button_color="#1E293B")
+                                         scrollbar_button_color="#1E293B")
         scroll.pack(fill="both", expand=True, padx=4)
 
         # Email
         self._field_label(scroll, "📧  Email Address",
                           hint="Used for CrossRef & Unpaywall API")
         self._e_email = ctk.CTkEntry(scroll, height=35,
-                                     font=ctk.CTkFont(size=11),
-                                     fg_color="#0D1117",
-                                     border_color="#1E3A5F", border_width=1)
+                                      font=ctk.CTkFont(size=11),
+                                      fg_color="#0D1117",
+                                      border_color="#1E3A5F", border_width=1)
         self._e_email.pack(fill="x", padx=12, pady=(0, 12))
         _add_placeholder(self._e_email, "e.g. yourname@university.edu")
 
@@ -915,12 +836,11 @@ class BiblioBlitzApp(ctk.CTk):
         self._field_label(scroll, "🔍  Keywords",
                           hint="Comma-separated • press 'Fetch Journals' after entering")
         self._e_keywords = ctk.CTkEntry(scroll, height=35,
-                                        font=ctk.CTkFont(size=11),
-                                        fg_color="#0D1117",
-                                        border_color="#1E3A5F", border_width=1)
+                                         font=ctk.CTkFont(size=11),
+                                         fg_color="#0D1117",
+                                         border_color="#1E3A5F", border_width=1)
         self._e_keywords.pack(fill="x", padx=12, pady=(0, 6))
-        _add_placeholder(self._e_keywords,
-                         "e.g. soil erosion, runoff, climate")
+        _add_placeholder(self._e_keywords, "e.g. soil erosion, runoff, climate")
 
         # Fetch Journals button
         self._btn_fetch_journals = ctk.CTkButton(
@@ -1025,28 +945,26 @@ class BiblioBlitzApp(ctk.CTk):
                       command=self._clear_log).pack(side="right")
 
         stats = ctk.CTkFrame(parent, fg_color="#0B1628",
-                             corner_radius=8, height=58)
+                              corner_radius=8, height=58)
         stats.pack(fill="x", padx=14, pady=(0, 8))
         stats.pack_propagate(False)
-        self._s_fetched = self._make_stat(stats, "Fetched",     "#3B82F6")
+        self._s_fetched  = self._make_stat(stats, "Fetched",     "#3B82F6")
         self._s_journals = self._make_stat(stats, "Journals",    "#A78BFA")
-        self._s_oa = self._make_stat(stats, "Open Access", "#8B5CF6")
-        self._s_done = self._make_stat(stats, "Downloaded",  "#10B981")
-        self._s_errors = self._make_stat(stats, "Errors",      "#EF4444")
-        self._s_skipped = self._make_stat(stats, "Skipped",     "#F59E0B")
+        self._s_oa       = self._make_stat(stats, "Open Access", "#8B5CF6")
+        self._s_done     = self._make_stat(stats, "Downloaded",  "#10B981")
+        self._s_errors   = self._make_stat(stats, "Errors",      "#EF4444")
+        self._s_skipped  = self._make_stat(stats, "Skipped",     "#F59E0B")
 
         self._log = ctk.CTkTextbox(parent,
-                                   font=ctk.CTkFont(
-                                       family="Consolas", size=11),
-                                   fg_color="#060D18", text_color="#CBD5E1",
-                                   corner_radius=8, wrap="none",
-                                   scrollbar_button_color="#1E293B")
+                                    font=ctk.CTkFont(family="Consolas", size=11),
+                                    fg_color="#060D18", text_color="#CBD5E1",
+                                    corner_radius=8, wrap="none",
+                                    scrollbar_button_color="#1E293B")
         self._log.pack(fill="both", expand=True, padx=14, pady=(0, 12))
         self._log.configure(state="disabled")
         for tag, color in [
-            ("step", "#A78BFA"), ("info", "#60A5FA"), ("success", "#34D399"),
-            ("warn", "#FCD34D"), ("error", "#F87171"), ("sep",
-                                                        "#1E293B"), ("done", "#6EE7B7")
+            ("step","#A78BFA"),("info","#60A5FA"),("success","#34D399"),
+            ("warn","#FCD34D"),("error","#F87171"),("sep","#1E293B"),("done","#6EE7B7")
         ]:
             self._log.tag_config(tag, foreground=color)
 
@@ -1054,22 +972,21 @@ class BiblioBlitzApp(ctk.CTk):
         f = ctk.CTkFrame(parent, fg_color="transparent")
         f.pack(side="left", expand=True)
         val = ctk.CTkLabel(f, text="—",
-                           font=ctk.CTkFont(size=17, weight="bold"),
-                           text_color=color)
+                            font=ctk.CTkFont(size=17, weight="bold"),
+                            text_color=color)
         val.pack(pady=(6, 0))
         ctk.CTkLabel(f, text=label,
                      font=ctk.CTkFont(size=9), text_color="#374151").pack()
         return val
 
     def _build_footer(self):
-        foot = ctk.CTkFrame(self, fg_color="#060D18",
-                            corner_radius=0, height=70)
+        foot = ctk.CTkFrame(self, fg_color="#060D18", corner_radius=0, height=70)
         foot.pack(fill="x", side="bottom")
         foot.pack_propagate(False)
 
         self._pbar = ctk.CTkProgressBar(foot, height=3, mode="indeterminate",
-                                        progress_color="#3B82F6",
-                                        fg_color="#0B1628")
+                                         progress_color="#3B82F6",
+                                         fg_color="#0B1628")
         self._pbar.pack(fill="x")
         self._pbar.set(0)
 
@@ -1099,8 +1016,7 @@ class BiblioBlitzApp(ctk.CTk):
 
     def _browse_dir(self):
         d = filedialog.askdirectory(title="Select Download Folder")
-        if d:
-            self.v_dir.set(d)
+        if d: self.v_dir.set(d)
 
     def _set_running(self, state):
         self._running = state
@@ -1145,8 +1061,7 @@ class BiblioBlitzApp(ctk.CTk):
         for pat, lbl in patterns:
             m = re.search(pat, line)
             if m:
-                v = next(g for g in m.groups(
-                ) if g is not None) if m.lastindex and m.lastindex > 1 else m.group(1)
+                v = next(g for g in m.groups() if g is not None) if m.lastindex and m.lastindex > 1 else m.group(1)
                 self.after(0, lambda v=v, l=lbl: l.configure(text=v))
 
     # ── Fetch journals ────────────────────────────────────────
@@ -1157,17 +1072,15 @@ class BiblioBlitzApp(ctk.CTk):
             messagebox.showerror("Input Error", "Enter keywords first.")
             return
         self._btn_fetch_journals.configure(state="disabled",
-                                           text="⏳ Fetching journals…")
+                                            text="⏳ Fetching journals…")
         self._lbl_journals_status.configure(text="Fetching from APIs…",
-                                            text_color="#FCD34D")
-        self._append_log(
-            "[INFO] Fetching journal list from CrossRef & OpenAlex…", "step")
+                                             text_color="#FCD34D")
+        self._append_log("[INFO] Fetching journal list from CrossRef & OpenAlex…", "step")
 
         def _worker():
             journals = fetch_journals_for_keywords(keywords, self._append_log)
             self._fetched_journals = journals
             self._selected_journals = []
-
             def _done():
                 self._btn_fetch_journals.configure(
                     state="normal",
@@ -1187,7 +1100,7 @@ class BiblioBlitzApp(ctk.CTk):
     def _open_journal_selector(self):
         if not self._fetched_journals:
             messagebox.showinfo("No Journals",
-                                "Please click 'Fetch Journals' first.")
+                "Please click 'Fetch Journals' first.")
             return
         dlg = JournalSelectorDialog(self, self._fetched_journals)
         self.wait_window(dlg)
@@ -1205,12 +1118,12 @@ class BiblioBlitzApp(ctk.CTk):
     # ── Validate ──────────────────────────────────────────────
 
     def _validate_inputs(self):
-        email = _get_val(self._e_email)
+        email    = _get_val(self._e_email)
         keywords = _get_val(self._e_keywords)
-        dl_dir = self.v_dir.get().strip()
+        dl_dir   = self.v_dir.get().strip()
         if not email or "@" not in email or "." not in email.split("@")[-1]:
             messagebox.showerror("Input Error",
-                                 "Please enter a valid email address.")
+                "Please enter a valid email address.")
             return False
         if not keywords:
             messagebox.showerror("Input Error", "Enter at least one keyword.")
@@ -1225,7 +1138,7 @@ class BiblioBlitzApp(ctk.CTk):
                 raise ValueError
         except (ValueError, tk.TclError):
             messagebox.showerror("Input Error",
-                                 "Max papers: 1–1,00,000\nStarting year: 1990–2025")
+                "Max papers: 1–1,00,000\nStarting year: 1990–2025")
             return False
         return True
 
@@ -1243,15 +1156,15 @@ class BiblioBlitzApp(ctk.CTk):
         self._status("Running…")
 
         params = dict(
-            email=_get_val(self._e_email),
-            download_dir=self.v_dir.get().strip().replace("\\", "/"),
-            keywords=_get_val(self._e_keywords),
-            max_results=int(self.v_max.get()),
-            year_from=int(self.v_year.get()),
-            selected_journals=list(self._selected_journals),
-            country=self.v_country.get(),
-            log_cb=self._append_log,
-            stop_event=self._stop_event,
+            email           = _get_val(self._e_email),
+            download_dir    = self.v_dir.get().strip().replace("\\", "/"),
+            keywords        = _get_val(self._e_keywords),
+            max_results     = int(self.v_max.get()),
+            year_from       = int(self.v_year.get()),
+            selected_journals = list(self._selected_journals),
+            country         = self.v_country.get(),
+            log_cb          = self._append_log,
+            stop_event      = self._stop_event,
         )
 
         threading.Thread(
