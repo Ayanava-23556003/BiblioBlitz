@@ -22,7 +22,7 @@ except ImportError:
     _PIL_OK = False
 
 APP_NAME    = "BiblioBlitz"
-APP_VER     = "v4.0"
+APP_VER     = "v3.2"
 APP_TAGLINE = "Global Open-Access Academic Paper Downloader"
 
 # ── Country list for region filter ────────────────────────────
@@ -44,10 +44,10 @@ COUNTRIES = [
     "United States","Uzbekistan","Venezuela","Vietnam","Zimbabwe",
 ]
 
-# ── Country → CrossRef/OpenAlex affiliation search strings ────
+# ── Country → CrossRef/PubMed affiliation search strings ──────
 COUNTRY_CODES = {
-    "India": "India", "China": "China", "United States": "USA",
-    "United Kingdom": "UK", "Germany": "Germany", "France": "France",
+    "India": "India", "China": "China", "United States": "United States",
+    "United Kingdom": "United Kingdom", "Germany": "Germany", "France": "France",
     "Australia": "Australia", "Canada": "Canada", "Japan": "Japan",
     "Brazil": "Brazil", "Italy": "Italy", "Spain": "Spain",
     "Netherlands": "Netherlands", "South Korea": "South Korea",
@@ -62,6 +62,33 @@ COUNTRY_CODES = {
     "Austria": "Austria", "Czech Republic": "Czech Republic",
     "Greece": "Greece", "Hungary": "Hungary", "Romania": "Romania",
     "Ukraine": "Ukraine", "Israel": "Israel",
+}
+
+# ── Country → ISO 3166-1 alpha-2 codes (for OpenAlex) ─────────
+COUNTRY_ISO2 = {
+    "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", "Argentina": "AR",
+    "Armenia": "AM", "Australia": "AU", "Austria": "AT", "Azerbaijan": "AZ",
+    "Bangladesh": "BD", "Belarus": "BY", "Belgium": "BE", "Bolivia": "BO",
+    "Bosnia and Herzegovina": "BA", "Brazil": "BR", "Bulgaria": "BG",
+    "Cambodia": "KH", "Canada": "CA", "Chile": "CL", "China": "CN",
+    "Colombia": "CO", "Croatia": "HR", "Cuba": "CU", "Czech Republic": "CZ",
+    "Denmark": "DK", "Ecuador": "EC", "Egypt": "EG", "Estonia": "EE",
+    "Ethiopia": "ET", "Finland": "FI", "France": "FR", "Georgia": "GE",
+    "Germany": "DE", "Ghana": "GH", "Greece": "GR", "Hungary": "HU",
+    "India": "IN", "Indonesia": "ID", "Iran": "IR", "Iraq": "IQ",
+    "Ireland": "IE", "Israel": "IL", "Italy": "IT", "Japan": "JP",
+    "Jordan": "JO", "Kazakhstan": "KZ", "Kenya": "KE", "Latvia": "LV",
+    "Lebanon": "LB", "Lithuania": "LT", "Malaysia": "MY", "Mexico": "MX",
+    "Morocco": "MA", "Nepal": "NP", "Netherlands": "NL", "New Zealand": "NZ",
+    "Nigeria": "NG", "Norway": "NO", "Pakistan": "PK", "Peru": "PE",
+    "Philippines": "PH", "Poland": "PL", "Portugal": "PT", "Romania": "RO",
+    "Russia": "RU", "Saudi Arabia": "SA", "Serbia": "RS", "Singapore": "SG",
+    "Slovakia": "SK", "South Africa": "ZA", "South Korea": "KR", "Spain": "ES",
+    "Sri Lanka": "LK", "Sudan": "SD", "Sweden": "SE", "Switzerland": "CH",
+    "Taiwan": "TW", "Thailand": "TH", "Turkey": "TR", "Uganda": "UG",
+    "Ukraine": "UA", "United Arab Emirates": "AE", "United Kingdom": "GB",
+    "United States": "US", "Uzbekistan": "UZ", "Venezuela": "VE",
+    "Vietnam": "VN", "Zimbabwe": "ZW",
 }
 
 # ── HTTP helpers ───────────────────────────────────────────────
@@ -104,14 +131,14 @@ def _safe_filename(title, doi):
 # ── Fetch journals live from CrossRef for given keywords ───────
 def fetch_journals_for_keywords(keywords, log_cb=None):
     """
-    Query CrossRef with keywords, collect unique journal names.
+    Query CrossRef & OpenAlex with keywords, collect unique journal names.
     Returns sorted list of journal names.
     """
     kw = " ".join(k.strip() for k in re.split(r"[,;|]+", keywords) if k.strip())
     journals = set()
     offset = 0
     fetched = 0
-    target = 500  # fetch up to 500 records to gather journal names
+    target = 3000  # fetch up to 3000 records to gather a comprehensive journal list
 
     while fetched < target:
         res = _http_get_json(
@@ -137,26 +164,43 @@ def fetch_journals_for_keywords(keywords, log_cb=None):
         offset += len(items)
         time.sleep(0.3)
         if log_cb:
-            log_cb(f"[INFO] Fetched {fetched} records for journal list…", "info")
+            log_cb(f"[INFO] CrossRef: {fetched} records scanned, {len(journals)} journals found…", "info")
+        if len(items) < 100:
+            break  # no more results
 
-    # Also query OpenAlex for more journals
+    # Also query OpenAlex for more journals — paginate multiple pages
     try:
-        res2 = _http_get_json(
-            "https://api.openalex.org/works",
-            params={
-                "search": kw,
-                "filter": "type:journal-article",
-                "per-page": 100,
-                "select": "primary_location",
-            }
-        )
-        if res2 and res2.get("results"):
-            for r in res2["results"]:
+        oa_page = 1
+        oa_fetched = 0
+        oa_target = 2000
+        while oa_fetched < oa_target:
+            res2 = _http_get_json(
+                "https://api.openalex.org/works",
+                params={
+                    "search": kw,
+                    "filter": "type:journal-article",
+                    "per-page": 200,
+                    "page": oa_page,
+                }
+            )
+            if not res2 or not res2.get("results"):
+                break
+            batch = res2["results"]
+            if not batch:
+                break
+            for r in batch:
                 loc = r.get("primary_location") or {}
                 src = loc.get("source") or {}
-                name = src.get("display_name", "")
+                name = src.get("display_name") or ""
                 if name:
                     journals.add(name.strip())
+            oa_fetched += len(batch)
+            oa_page += 1
+            time.sleep(0.3)
+            if log_cb:
+                log_cb(f"[INFO] OpenAlex: {oa_fetched} records scanned, {len(journals)} journals total…", "info")
+            if len(batch) < 200:
+                break
     except Exception:
         pass
 
@@ -235,8 +279,10 @@ def run_download(
     log_cb("[STEP 2/5] Searching OpenAlex…", "step")
     oa_items = []
     oa_filter = f"publication_year:>{year_from-1},type:journal-article"
-    if country_str:
-        oa_filter += f",institutions.country_code:{country_str[:2].upper()}"
+    if country and country != "Global (All Countries)":
+        iso2 = COUNTRY_ISO2.get(country, "")
+        if iso2:
+            oa_filter += f",institutions.country_code:{iso2}"
     page = 1
     while len(oa_items) < max_results:
         if stop_event.is_set(): break
@@ -244,9 +290,9 @@ def run_download(
             "https://api.openalex.org/works",
             params={
                 "search": query_str, "filter": oa_filter,
-                "per-page": min(100, max_results - len(oa_items)),
+                "per-page": min(200, max_results - len(oa_items)),
                 "page": page,
-                "select": "doi,title,publication_year,primary_location,open_access",
+                "mailto": email,
             }
         )
         if not res or not res.get("results"): break
@@ -258,8 +304,10 @@ def run_download(
             year  = r.get("publication_year")
             loc   = r.get("primary_location") or {}
             src   = loc.get("source") or {}
-            journal = src.get("display_name", "")
-            oa_url = (r.get("open_access") or {}).get("oa_url", "")
+            journal = src.get("display_name") or ""
+            # oa_url can be in open_access dict or primary_location
+            oa_url = (r.get("open_access") or {}).get("oa_url") or \
+                     loc.get("pdf_url") or ""
             if doi and title:
                 oa_items.append({
                     "doi": doi, "title": title, "year": year,
@@ -274,23 +322,33 @@ def run_download(
     log_cb("[STEP 3/5] Searching Semantic Scholar…", "step")
     ss_items = []
     ss_offset = 0
-    while len(ss_items) < min(max_results, 1000):
+    ss_limit  = min(max_results, 500)   # S2 caps at 10k total; be polite
+    ss_retries = 0
+    while len(ss_items) < ss_limit:
         if stop_event.is_set(): break
         res = _http_get_json(
-            "https://api.semanticscholar.org/graph/v1/paper/search",
+            "https://api.semanticscholar.org/graph/v1/paper/search/bulk",
             params={
                 "query": query_str,
                 "fields": "title,year,externalIds,venue,openAccessPdf",
-                "limit": min(100, max_results - len(ss_items)),
+                "limit": min(100, ss_limit - len(ss_items)),
                 "offset": ss_offset,
             }
         )
-        if not res or not res.get("data"): break
+        if res is None:
+            # Possible 429 — back off and retry once
+            ss_retries += 1
+            if ss_retries <= 2:
+                time.sleep(5)
+                continue
+            break
+        if not res.get("data"): break
+        ss_retries = 0
         for r in res["data"]:
             doi    = (r.get("externalIds") or {}).get("DOI", "")
-            title  = r.get("title", "")
+            title  = r.get("title", "") or ""
             year   = r.get("year")
-            journal= r.get("venue", "")
+            journal= r.get("venue", "") or ""
             oa     = r.get("openAccessPdf") or {}
             pdf_url= oa.get("url", "")
             if title and (year is None or year >= year_from):
@@ -299,8 +357,8 @@ def run_download(
                     "journal": journal, "pdf_url": pdf_url,
                     "_source": "SemanticScholar"
                 })
-        ss_offset += 100
-        time.sleep(0.5)
+        ss_offset += len(res["data"])
+        time.sleep(1.0)  # S2 is strict on rate limits
     log_cb(f"[INFO] Semantic Scholar: {len(ss_items)} results", "info")
 
     # ── Search PubMed ─────────────────────────────────────────
@@ -309,9 +367,11 @@ def run_download(
     pm_query = query_str
     if country_str:
         pm_query += f" AND {country_str}[affiliation]"
+    import datetime as _dt
+    current_year = _dt.date.today().year
     s = _http_get_json(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
-        params={"db": "pubmed", "term": f"{pm_query} AND {year_from}:{2025}[pdat]",
+        params={"db": "pubmed", "term": f"{pm_query} AND {year_from}:{current_year}[pdat]",
                 "retmax": min(max_results, 10000), "retmode": "json"}
     )
     if s:
@@ -392,21 +452,36 @@ def run_download(
     # ── Journal filter ────────────────────────────────────────
     if journal_filter:
         def _jmatch(j):
+            if not j:
+                return False
             jl = j.lower()
             for f in journal_filter:
                 if f in jl or jl in f:
                     return True
             return False
-        papers = [p for p in deduped if _jmatch(p.get("journal", ""))]
+        papers = [p for p in deduped if _jmatch(p.get("journal") or "")]
         log_cb(f"[INFO] After journal filter: {len(papers)}", "info")
     else:
         papers = deduped
 
-    # Keyword filter on title
-    if kw_pattern:
-        papers = [p for p in papers if p.get("title") and
-                  re.search(kw_pattern, p["title"].lower())]
-    log_cb(f"[INFO] After keyword filter: {len(papers)}", "info")
+    # Keyword filter on title (match ANY keyword, not all)
+    # Build individual keyword patterns
+    kw_list = [re.escape(k.lower()) for k in kw_parts]
+    if kw_list:
+        filtered_kw = [
+            p for p in papers
+            if p.get("title") and any(
+                re.search(pat, p["title"].lower()) for pat in kw_list
+            )
+        ]
+        # Only apply if it doesn't eliminate everything
+        if filtered_kw:
+            papers = filtered_kw
+            log_cb(f"[INFO] After keyword filter: {len(papers)}", "info")
+        else:
+            log_cb(f"[INFO] Keyword filter skipped (would remove all results); keeping {len(papers)}", "warn")
+    else:
+        log_cb(f"[INFO] After keyword filter: {len(papers)}", "info")
 
     if not papers:
         log_cb("[WARN] No papers matched. Try broader keywords or select more journals.", "warn")
@@ -460,7 +535,8 @@ def run_download(
             "title": p["title"], "doi": p.get("doi",""),
             "year": p.get("year",""), "journal": p.get("journal",""),
             "country_filter": country or "Global",
-            "source": p.get("_source",""), "status": status, "file": fname,
+            "source": p.get("_source",""), "status": status,
+            "pdf_url": p.get("pdf_url",""), "file": fname,
         })
         time.sleep(0.5)
 
@@ -478,13 +554,15 @@ def run_download(
     log_cb(f"[DONE]  Downloaded: {n_ok}  |  Skipped: {n_skip}  |  Errors: {n_err}", "done")
 
 
-def run_pdf_integrity_check(folder, log_cb, stop_event):
+def run_pdf_integrity_check(folder, log_cb, stop_event, email=""):
     bad_folder = os.path.join(folder, "Corrupted_PDFs")
     os.makedirs(bad_folder, exist_ok=True)
     pdfs = [f for f in os.listdir(folder) if f.lower().endswith(".pdf")]
     log_cb(f"[INFO] Found {len(pdfs)} PDF(s).", "info")
     ok_count = bad_count = 0
     results = []
+    bad_files = []  # list of (original_fname, dest_path)
+
     for fname in pdfs:
         if stop_event.is_set(): break
         fpath = os.path.join(folder, fname)
@@ -508,12 +586,14 @@ def run_pdf_integrity_check(folder, log_cb, stop_event):
                 dest = os.path.join(bad_folder, f"{base}_dup{c}{ext}"); c += 1
             try:
                 os.replace(fpath, dest)
-                log_cb(f"[MOVED] {fname} → {status}", "warn")
+                log_cb(f"[MOVED] {fname} → Corrupted_PDFs/ ({status})", "warn")
+                bad_files.append((fname, fpath))
             except Exception as e:
                 log_cb(f"[ERROR] {fname}: {e}", "error")
                 status = f"MoveError:{status}"
             bad_count += 1
         results.append({"FileName": fname, "Status": status, "SizeMB": size_mb})
+
     try:
         rp = os.path.join(folder, "pdf_integrity_report.csv")
         with open(rp, "w", newline="", encoding="utf-8") as fh:
@@ -522,7 +602,80 @@ def run_pdf_integrity_check(folder, log_cb, stop_event):
         log_cb(f"[REPORT] {rp}", "info")
     except Exception as e:
         log_cb(f"[WARN] {e}", "warn")
-    log_cb(f"[DONE]  OK: {ok_count}  |  Problematic: {bad_count}", "done")
+
+    log_cb(f"[DONE]  OK: {ok_count}  |  Corrupted/moved: {bad_count}", "done")
+
+    # ── Re-download corrupted files from download_log.csv ──────
+    if bad_files and not stop_event.is_set():
+        log_cb("─" * 55, "sep")
+        log_cb(f"[STEP] Attempting re-download for {len(bad_files)} corrupted file(s)…", "step")
+        log_path = os.path.join(folder, "download_log.csv")
+        # Build a lookup: filename → pdf_url from log
+        url_map = {}
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, newline="", encoding="utf-8") as fh:
+                    reader = csv.DictReader(fh)
+                    for row in reader:
+                        fn = row.get("file", "")
+                        url = row.get("pdf_url", "") or row.get("url", "")
+                        doi = row.get("doi", "")
+                        if fn and (url or doi):
+                            url_map[fn] = {"url": url, "doi": doi,
+                                           "title": row.get("title", "")}
+            except Exception as e:
+                log_cb(f"[WARN] Could not read download_log.csv: {e}", "warn")
+
+        re_ok = re_fail = re_skip = 0
+        for fname, fpath in bad_files:
+            if stop_event.is_set(): break
+            info = url_map.get(fname)
+            if not info:
+                log_cb(f"[SKIP]  No URL in log for: {fname[:60]}", "warn")
+                re_skip += 1
+                continue
+
+            pdf_url = info.get("url", "")
+            doi = info.get("doi", "")
+
+            # Try Unpaywall if no direct url
+            if not pdf_url and doi and email:
+                enc = urllib.parse.quote(doi, safe="")
+                data = _http_get_json(f"https://api.unpaywall.org/v2/{enc}",
+                                      params={"email": email})
+                if data:
+                    loc = data.get("best_oa_location") or {}
+                    pdf_url = loc.get("url_for_pdf") or loc.get("url") or ""
+
+            if not pdf_url:
+                log_cb(f"[SKIP]  No PDF URL found for: {fname[:60]}", "warn")
+                re_skip += 1
+                continue
+
+            log_cb(f"[RETRY] {fname[:60]}", "info")
+            ok = _download_file(pdf_url, fpath, email or "biblioblitz@tool")
+            if ok:
+                # Verify the re-downloaded file
+                try:
+                    with open(fpath, "rb") as fh:
+                        hdr2 = fh.read(4)
+                    if hdr2 == b"%PDF":
+                        log_cb(f"[OK]    Re-downloaded successfully: {fname[:60]}", "success")
+                        re_ok += 1
+                    else:
+                        log_cb(f"[FAIL]  Still corrupt after retry: {fname[:60]}", "error")
+                        if os.path.exists(fpath):
+                            try: os.remove(fpath)
+                            except: pass
+                        re_fail += 1
+                except Exception:
+                    re_fail += 1
+            else:
+                log_cb(f"[FAIL]  Re-download failed: {fname[:60]}", "error")
+                re_fail += 1
+            time.sleep(0.5)
+
+        log_cb(f"[DONE]  Re-download: {re_ok} success  |  {re_fail} failed  |  {re_skip} skipped", "done")
 
 
 # ── Placeholder helper ─────────────────────────────────────────
@@ -1132,13 +1285,15 @@ class BiblioBlitzApp(ctk.CTk):
             messagebox.showerror("Input Error", "Set a Download Directory.")
             return False
         try:
+            import datetime as _dt
+            cur_yr = _dt.date.today().year
             if not (1 <= int(self.v_max.get()) <= 100000):
                 raise ValueError
-            if not (1990 <= int(self.v_year.get()) <= 2025):
+            if not (1990 <= int(self.v_year.get()) <= cur_yr):
                 raise ValueError
         except (ValueError, tk.TclError):
             messagebox.showerror("Input Error",
-                "Max papers: 1–1,00,000\nStarting year: 1990–2025")
+                f"Max papers: 1–1,00,000\nStarting year: 1990–{cur_yr}")
             return False
         return True
 
@@ -1209,7 +1364,8 @@ class BiblioBlitzApp(ctk.CTk):
 
     def _worker_pdf(self, folder):
         try:
-            run_pdf_integrity_check(folder, self._append_log, self._stop_event)
+            email = _get_val(self._e_email)
+            run_pdf_integrity_check(folder, self._append_log, self._stop_event, email=email)
             self._status("PDF check complete ✓")
         except Exception as exc:
             self._append_log(f"[ERROR] {exc}", "error")
