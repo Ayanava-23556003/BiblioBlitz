@@ -11,7 +11,7 @@
 
 No installation required! Just download and run:
 
-* **Step 1:** Download **[BiblioBlitz.exe](https://github.com/Ayanava-23556003/BiblioBlitz/releases/download/v3.2.0/BiblioBlitz.exe)**
+* **Step 1:** Download **[BiblioBlitz_Setup.exe](https://github.com/Ayanava-23556003/BiblioBlitz/releases/download/v3.2.0/BiblioBlitz_Setup.exe)**
 * **Step 2:** Double-click to launch — no Python, no R, no setup needed
 * **Step 3:** Enter your email, keywords, select journals, and click **Start Download**
 
