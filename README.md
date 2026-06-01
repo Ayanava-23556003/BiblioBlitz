@@ -142,15 +142,14 @@ If you use BiblioBlitz in your research, please cite:
   url       = {https://doi.org/10.5281/zenodo.20469653}
 }
 ```
-
-```md
+---
 ## Contributors
 
 | Name | Contribution |
 |---|---|
 | **Ayanava Poddar** | Software design, implementation, integration, packaging, and maintenance |
 | **Subhrajyoti Bhattacharjee** | Initial conceptual input and project discussions |
-```
+
 ---
 
 ## License
