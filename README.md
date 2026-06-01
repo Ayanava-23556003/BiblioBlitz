@@ -1,7 +1,7 @@
 # BiblioBlitz v3.2
 ### Global Open-Access Academic Paper Downloader
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20469653.svg)](https://doi.org/10.5281/zenodo.20469653)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20469653.png)](https://doi.org/10.5281/zenodo.20469653)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.png)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.png)](https://www.python.org/)
 
