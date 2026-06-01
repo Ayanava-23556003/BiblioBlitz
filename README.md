@@ -128,13 +128,13 @@ BiblioBlitz is designed with user privacy in mind.
 
 If you use BiblioBlitz in your research, please cite:
 
-> Poddar, A. (2026). *BiblioBlitz v3.2 — Global Open-Access Academic Paper Downloader*. Zenodo. https://doi.org/10.5281/zenodo.20469653
+> Poddar, A., & Bhattacharjee, S. (2026). BiblioBlitz v3.2: A Multi-Source Global Open-Access Academic Paper Downloader with Country Filtering and Dynamic Journal Selection (v3.2.0). Zenodo. https://doi.org/10.5281/zenodo.20469653
 
 **BibTeX:**
 ```bibtex
 @software{biblioblitz2026,
-  author    = {Poddar, Ayanava},
-  title     = {BiblioBlitz — Global Open-Access Academic Paper Downloader},
+  author    = {Poddar, Ayanava and Bhattacharjee, Subhrajyoti},
+  title     = {BiblioBlitz v3.2: A Multi-Source Global Open-Access Academic Paper Downloader with Country Filtering and Dynamic Journal Selection (v3.2.0)},
   year      = {2026},
   publisher = {Zenodo},
   version   = {3.2},
@@ -143,6 +143,14 @@ If you use BiblioBlitz in your research, please cite:
 }
 ```
 
+```md
+## Contributors
+
+| Name | Contribution |
+|---|---|
+| **Ayanava Poddar** | Software design, implementation, integration, packaging, and maintenance |
+| **Subhrajyoti Bhattacharjee** | Initial conceptual input and project discussions |
+```
 ---
 
 ## License
