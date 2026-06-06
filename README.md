@@ -1,164 +1,134 @@
-# BiblioBlitz v3.2
-### Global Open-Access Academic Paper Downloader
+# BiblioBlitz v4.1
+### Global Academic Knowledge Harvester & Literature Review Suite
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20469653.svg)](https://doi.org/10.5281/zenodo.20469653)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
+BiblioBlitz is a desktop application for automated academic literature retrieval, PDF harvesting, and publication trend analysis. It queries multiple open scholarly APIs simultaneously, applies geographic and journal-level filters, and downloads verified open-access PDFs to a local directory — all through a clean graphical interface.
 
 ---
 
-## Quick Start Guide
+## Features
 
-No installation required! Just download and run:
+### Literature Retrieval
+- Queries **four independent APIs in parallel**: CrossRef, OpenAlex, PubMed, and CORE
+- Fetches up to **10,000 records per API per query**, with multi-country query fan-out
+- Deduplicates records across all sources before processing
+- Retains full metadata (title, DOI, year, journal, authors, abstract, source) for all records, even when PDFs are unavailable
 
-* **Step 1:** Download **[BiblioBlitz_Setup.exe](https://github.com/Ayanava-23556003/BiblioBlitz/releases/download/v3.2.0/BiblioBlitz_Setup.exe)**
-* **Step 2:** Double-click to launch — no Python, no R, no setup needed
-* **Step 3:** Enter your email, keywords, select journals, and click **Start Download**
+### PDF Download Pipeline
+- Resolves open-access PDFs via a **three-tier fallback chain**:
+  1. Unpaywall (primary — returns verified PDF URLs)
+  2. Semantic Scholar OA index (secondary fallback)
+  3. Direct source URLs from non-CrossRef APIs (tertiary fallback)
+- Post-download integrity sweep: verifies every file starts with `%PDF` header and is non-trivially sized; permanently removes corrupted or HTML-disguised files
+- Skips already-downloaded files (cache-aware)
+- Exports a `download_log.csv` with title, DOI, year, journal, and download status for every processed record
+
+### Filtering
+- **Country filter**: select one or more countries; queries are geo-expanded to include the country name as a title search term
+- **State/region filter**: cascading sub-national filter loaded from a local `states.csv`, with a live web fallback if the country is not found locally
+- **Journal filter**: select specific publication venues from a dynamically fetched list; uses substring matching so variant journal name formats are handled correctly
+- **Year filter**: restricts records to a minimum publication year
+- **Max results cap**: user-defined ceiling on the number of records sent to the download pipeline
+
+### Publication Trend Analysis (Tab 2)
+- Queries CrossRef and OpenAlex for a keyword set and year range
+- Renders three live matplotlib charts:
+  - Scholarly output volume over time (line plot)
+  - Top 3 publication venues by year (grouped bar chart)
+  - Document type composition (pie chart)
+- Chart rendering runs on the main UI thread to prevent freezing
+
+### Output Modes
+- **PDF + CSV**: download PDFs and write a metadata log
+- **CSV only**: write metadata log without attempting PDF downloads
+- **Both**: same as PDF + CSV
 
 ---
 
-## What's New
+## Installation
 
-### v3.2
-| Feature | Details |
+**Requirements:** Python 3.9+
+
+```bash
+pip install customtkinter matplotlib requests
+```
+
+Place the following files in the same directory:
+
+```
+biblioblitz_project/
+├── main.py
+├── core_engine.py
+├── utils.py
+├── config.py
+├── states.csv          # Administrative divisions data
+├── biblioblitz.ico     # App icon (Windows taskbar)
+└── biblioblitz.png     # App icon (fallback)
+```
+
+**Run:**
+
+```bash
+python main.py
+```
+
+---
+
+## Usage
+
+1. Enter your **search keywords** (comma, semicolon, or pipe-separated for multi-term queries)
+2. Enter a **valid email address** — required by the Unpaywall and CrossRef polite pool APIs
+3. Select a **download directory**
+4. Optionally click **Extract Mapped Publication Portals** to fetch available journals, then filter by venue
+5. Optionally select **countries** and **states** to narrow by geographic relevance in titles
+6. Set a **year range** and **maximum result count**
+7. Click **Download PDFs**, **Export CSV**, or **Both**
+
+Progress is logged in real time. A `download_log.csv` is written to the download directory on completion.
+
+---
+
+## File Structure
+
+| File | Role |
 |---|---|
-| **Bug fixes** | Fixed NoneType crash on missing journal names |
-| **OpenAlex filter** | Corrected country-code filter for author affiliation |
-| **Taskbar icon** | Proper `.ico` support for Windows title bar and taskbar |
-| **Privacy notice** | Clear disclosure of API data usage |
-
-### v3.1 → v3.2 (from PaperFinder v2)
-| Feature | v2 (PaperFinder) | v3+ (BiblioBlitz) |
-|---|---|---|
-| App name | PaperFinder | **BiblioBlitz** |
-| Backend | R + PowerShell | **Pure Python** (no R needed) |
-| System requirement | Windows 64-bit | **Any OS, any arch** |
-| Max papers | 10,000 | **1,00,000** |
-| Journal filter | Hardcoded Q1 list | **Live fetch — all journals worldwide** |
-| Journal selection | None | **Searchable multi-select dialog** |
-| Search sources | CrossRef only | **6 APIs** (CrossRef, OpenAlex, Semantic Scholar, PubMed, CORE, Unpaywall) |
-| Region filter | None | **80+ countries or Global** |
-| Input placeholders | Hard-coded defaults | **Smart placeholders** (auto-clear on type) |
-| Logo | File path dependent | **Always visible** (bundled in EXE) |
-| Close confirmation | None | **Exit prompt** (warns if download running) |
+| `main.py` | GUI controller — all windows, dialogs, and event wiring |
+| `core_engine.py` | API fetch logic, download pipeline, integrity sweep, trend charts |
+| `utils.py` | HTTP helpers, file download, filename sanitizer, UI utilities |
+| `config.py` | App constants, color palette, country list and ISO codes |
+| `states.csv` | Local source for sub-national administrative divisions |
 
 ---
 
-## Requirements
+## API Sources
 
-- **Python 3.9+** — only needed to **build** the EXE on your machine
-- End users need **nothing** — just the EXE file
-- Internet connection required at runtime
-
-### To build the standalone EXE (Windows)
-```
-double-click  build_exe.bat
-```
-The output `dist\BiblioBlitz.exe` runs on **any Windows 10/11 PC** (32-bit or 64-bit).
-
----
-
-## How It Works
-
-BiblioBlitz runs a 7-stage pipeline:
-
-1. **Fetch Journals** — queries CrossRef & OpenAlex with your keywords to build a live journal list
-2. **Select Journals** — searchable multi-select dialog; leave empty to search all journals
-3. **Multi-source Search** — queries 5 APIs simultaneously:
-   - CrossRef (150M+ works)
-   - OpenAlex (250M+ works)
-   - Semantic Scholar (200M+ papers)
-   - PubMed / NCBI (35M+ records)
-   - CORE (200M+ open-access documents)
-4. **Deduplication** — merges all results and removes duplicates by DOI
-5. **Journal + Keyword Filter** — retains only papers matching your selected journals and keywords
-6. **Unpaywall Check** — resolves open-access PDF links for papers missing a direct URL
-7. **PDF Download** — downloads PDFs and saves a `download_log.csv` summary
-
----
-
-## Search Sources
-
-| Source | Coverage | Contribution |
-|---|---|---|
-| **CrossRef** | 150M+ works | Primary journal article metadata |
-| **OpenAlex** | 250M+ works | Modern open index with OA signals |
-| **Semantic Scholar** | 200M+ papers | AI-enriched metadata, interdisciplinary |
-| **PubMed / NCBI** | 35M+ records | Biomedical and environmental health |
-| **CORE** | 200M+ OA docs | Direct open-access PDF links |
-| **Unpaywall** | 50M+ OA links | Best-available PDF URL resolution by DOI |
-
-All sources are **free, official, and legal APIs** — no scraping, no Terms of Service violations.
-
----
-
-## Region / Country Filter
-
-BiblioBlitz can filter papers by **author affiliation country**, including:
-India, China, United States, United Kingdom, Germany, France, Australia, Brazil, and 75+ more.
-
-Select **"Global (All Countries)"** to search without any geographic restriction.
-
----
-
-## Tips
-
-- Enter keywords first, then click **"Fetch Journals"** to load the journal list
-- Select specific journals from the dialog, or leave unselected to use all journals
-- Use broad keywords (e.g. `soil erosion, runoff`) for more results
-- Max **1,00,000 papers** supported — large runs may take several hours
-- Use **Run PDF Integrity Check** after downloading to quarantine corrupt files
-- The `download_log.csv` in your download folder lists every paper with title, DOI, journal, year, source, country filter, and download status
-
----
-
-## Privacy
-
-BiblioBlitz is designed with user privacy in mind.
-
-- Your **email address** is sent only to CrossRef and Unpaywall as required by their fair-use policies. It is **not stored** by BiblioBlitz anywhere.
-- Your **keywords, country, and journal selections** are sent to the search APIs to retrieve results. They are not stored or logged.
-- **No data is ever sent to the BiblioBlitz developers** or any third party beyond the APIs listed above.
-- **No usage analytics, telemetry, or tracking** of any kind is collected.
-- All processing happens **locally on your machine**.
-
----
-
-## Citation
-
-If you use BiblioBlitz in your research, please cite:
-
-> Poddar, A., & Bhattacharjee, S. (2026). BiblioBlitz v3.2: A Multi-Source Global Open-Access Academic Paper Downloader with Country Filtering and Dynamic Journal Selection (v3.2.0). Zenodo. https://doi.org/10.5281/zenodo.20469653
-
-**BibTeX:**
-```bibtex
-@software{biblioblitz2026,
-  author    = {Poddar, Ayanava and Bhattacharjee, Subhrajyoti},
-  title     = {BiblioBlitz v3.2: A Multi-Source Global Open-Access Academic Paper Downloader with Country Filtering and Dynamic Journal Selection (v3.2.0)},
-  year      = {2026},
-  publisher = {Zenodo},
-  version   = {3.2},
-  doi       = {10.5281/zenodo.20469653},
-  url       = {https://doi.org/10.5281/zenodo.20469653}
-}
-```
----
-## Contributors
-
-| Name | Contribution |
+| API | Use |
 |---|---|
-| **Ayanava Poddar** | Software design, implementation, integration, packaging, and maintenance |
-| **Subhrajyoti Bhattacharjee** | Initial conceptual input and project discussions |
+| [CrossRef](https://api.crossref.org) | Journal article metadata, DOIs, publisher data |
+| [OpenAlex](https://openalex.org) | Open metadata with OA PDF URLs |
+| [PubMed / NCBI E-utilities](https://www.ncbi.nlm.nih.gov/home/develop/api/) | Biomedical and life sciences literature |
+| [CORE](https://core.ac.uk) | Open access full-text repository |
+| [Unpaywall](https://unpaywall.org) | Verified open-access PDF resolution by DOI |
+| [Semantic Scholar](https://www.semanticscholar.org/product/api) | Secondary OA PDF fallback |
+
+All APIs are used without authentication keys (public/polite-pool access). Rate limiting is respected with small inter-request delays.
+
+---
+
+## Notes
+
+- PubMed coverage is strongest for biomedical topics. For earth sciences and hydrology, CrossRef and OpenAlex will provide the majority of records.
+- The proportion of downloadable PDFs depends on open-access availability of the literature. Paywalled papers have their metadata retained in the CSV log.
+- For very large result sets (>5,000 records), runtime is dominated by Unpaywall API calls (~0.15s per record).
 
 ---
 
 ## License
 
-MIT License — free to use, modify, and distribute with attribution.
+MIT License. See `LICENSE` for details.
 
 ---
 
-## Acknowledgements
+## Author
 
-BiblioBlitz uses the following free and open academic APIs:
-[CrossRef](https://www.crossref.org) · [OpenAlex](https://openalex.org) · [Semantic Scholar](https://www.semanticscholar.org) · [PubMed/NCBI](https://pubmed.ncbi.nlm.nih.gov) · [CORE](https://core.ac.uk) · [Unpaywall](https://unpaywall.org)
+Ayanava Poddar  
+Junior Research Fellow, Department of Hydrology, IIT Roorkee
