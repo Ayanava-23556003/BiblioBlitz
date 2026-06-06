@@ -128,7 +128,7 @@ MIT License. See `LICENSE` for details.
 
 ---
 
-## Author
+## Authors
 
-Ayanava Poddar  
-Junior Research Fellow, Department of Hydrology, IIT Roorkee
+Ayanava Poddar, Junior Research Fellow and PhD Scholar, Department of Hydrology, IIT Roorkee
+Subhrajyoti Bhattacharjee, PhD Scholar, Department of Hydrology, IIT Roorkee
