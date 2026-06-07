@@ -11,7 +11,7 @@ import time
 from py.utils import _http_get_json, _download_file, _safe_filename
 from py.engine.geo import (
     OTHER_JOURNALS, _clean_publisher, _geo_terms, _title_matches_geo,
-    _state_name, _journal_name
+    _title_matches_keywords, _state_name, _journal_name
 )
 
 
@@ -135,7 +135,7 @@ def run_download(
         while crossref_fetched < source_quota and not stop_event.is_set():
             rows = min(1000, source_quota - crossref_fetched)
             res = _http_get_json("https://api.crossref.org/works", params={
-                "query.title": query_str,
+                "query.title": query_str,          # title-specific field
                 "filter": f"from-pub-date:{year_from},type:journal-article",
                 "rows": rows, "offset": crossref_fetched, "mailto": email
             })
@@ -144,6 +144,8 @@ def run_download(
                 break
             for item in items:
                 title = (item.get("title") or [""])[0]
+                if not _title_matches_keywords(title, keywords):
+                    continue
                 if not _title_matches_geo(title, geo_terms_list):
                     continue
                 try:
@@ -180,8 +182,7 @@ def run_download(
         while openalex_fetched < source_quota and not stop_event.is_set():
             per_page = min(200, source_quota - openalex_fetched)
             res_oa = _http_get_json("https://api.openalex.org/works", params={
-                "search": query_str,
-                "filter": f"from_publication_date:{year_from}-01-01,type:article",
+                "filter": f"title.search:{query_str},from_publication_date:{year_from}-01-01,type:article",
                 "per_page": per_page, "page": page
             })
             results = (res_oa or {}).get("results") or []
@@ -189,6 +190,8 @@ def run_download(
                 break
             for r in results:
                 title = r.get("title") or ""
+                if not _title_matches_keywords(title, keywords):
+                    continue
                 if not _title_matches_geo(title, geo_terms_list):
                     continue
                 loc = r.get("primary_location") or {}
@@ -213,9 +216,13 @@ def run_download(
 
         # ── PubMed ──────────────────────────────────────────────────────────
         log_cb(f"[API] PubMed query: {query_str}", "step")
+        # Build a PubMed Title-field query: each phrase in [Title] joined by OR
+        pubmed_phrases = [p.strip() for p in re.split(r"[,;|]+", keywords) if p.strip()]
+        pubmed_title_q = " OR ".join(f'"{ph}"[Title]' for ph in pubmed_phrases)
         res_pm = _http_get_json(
             "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
-            params={"db": "pubmed", "term": f"{query_str} {year_from}:3000[pdat]",
+            params={"db": "pubmed",
+                    "term": f"({pubmed_title_q}) AND {year_from}:3000[pdat]",
                     "retmode": "json", "retmax": source_quota})
         ids = (((res_pm or {}).get("esearchresult") or {}).get("idlist") or [])
         if ids:
@@ -230,6 +237,8 @@ def run_download(
                 for uid in result.get("uids") or []:
                     entry = result.get(uid) or {}
                     title = entry.get("title") or ""
+                    if not _title_matches_keywords(title, keywords):
+                        continue
                     if not _title_matches_geo(title, geo_terms_list):
                         continue
                     year_match = re.search(r"\d{4}", entry.get("pubdate") or "")
@@ -246,10 +255,15 @@ def run_download(
 
         # ── CORE ────────────────────────────────────────────────────────────
         log_cb(f"[API] CORE query: {query_str}", "step")
+        # Use CORE's title field query: title:(phrase)
+        core_phrases = [p.strip() for p in re.split(r"[,;|]+", keywords) if p.strip()]
+        core_q = " OR ".join(f'title:("{ph}")' for ph in core_phrases)
         res_core = _http_get_json("https://api.core.ac.uk/v3/search/works",
-                                  params={"q": query_str, "limit": min(source_quota, 1000)})
+                                  params={"q": core_q, "limit": min(source_quota, 1000)})
         for item in (res_core or {}).get("results") or []:
             title = item.get("title") or ""
+            if not _title_matches_keywords(title, keywords):
+                continue
             if not _title_matches_geo(title, geo_terms_list):
                 continue
             journals = item.get("journals") or []

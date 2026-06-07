@@ -4,6 +4,7 @@ engine/geo.py - Geographic Helper Functions, States CSV Loader, World States Fet
 """
 
 import os
+import re
 import sys
 import csv
 
@@ -20,7 +21,8 @@ def _get_states_csv_path():
         base = sys._MEIPASS
     else:
         # Walk up from engine/ to project root where states.csv lives
-        base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        base = os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))
     return os.path.join(base, "states.csv")
 
 
@@ -59,6 +61,39 @@ def _title_matches_geo(title, terms):
         return True
     title_l = (title or "").lower()
     return any(term.lower() in title_l for term in terms)
+
+
+def _title_matches_keywords(title, keywords_str):
+    """
+    Keyword matching that respects multi-word phrases.
+
+    The user types phrases separated by comma / semicolon / pipe, e.g.:
+        "soil erosion, sediment yield"  ->  phrases = ["soil erosion", "sediment yield"]
+        "soil erosion"                  ->  phrases = ["soil erosion"]
+
+    A title passes if AT LEAST ONE phrase matches, where a phrase matches only
+    when EVERY word in that phrase appears in the title (in any order).
+
+    Splitting on whitespace alone is intentionally avoided so that
+    "soil erosion" is never broken into lone tokens ["soil", "erosion"].
+    """
+    if not keywords_str or not keywords_str.strip():
+        return True
+    title_l = (title or "").lower()
+
+    # Split into phrases on comma / semicolon / pipe only — NOT on spaces
+    phrases = [p.strip().lower()
+               for p in re.split(r"[,;|]+", keywords_str) if p.strip()]
+    if not phrases:
+        return True
+
+    for phrase in phrases:
+        # Every word in this phrase must appear somewhere in the title
+        words = [w for w in phrase.split() if w]
+        if words and all(w in title_l for w in words):
+            return True
+
+    return False
 
 
 def _load_states_from_csv():
