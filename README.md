@@ -59,7 +59,7 @@ BiblioBlitz is a desktop application for automated academic literature retrieval
 
 ### 📋 Journal Filtering
 - Fetches a live venue list from CrossRef, OpenAlex, PubMed, and CORE for your keyword set
-- Select specific journals via a searchable dialog
+- Select specific journals via a searchable two-panel dialog (Available ↔ Selected)
 - Uses **substring matching** to handle variant journal name formats across APIs
 
 ### 📈 Live Publication Trend Analysis
@@ -81,20 +81,32 @@ BiblioBlitz is a desktop application for automated academic literature retrieval
 **Requirements:** Python 3.9+
 
 ```bash
-pip install customtkinter matplotlib
+pip install customtkinter matplotlib Pillow
 ```
 
-Place the following in the same directory:
+Clone or download the repository and ensure the following structure is intact:
 
 ```
-biblioblitz_project/
+BiblioBlitz/
 ├── main.py
-├── core_engine.py
-├── utils.py
-├── config.py
 ├── states.csv
 ├── biblioblitz.ico
-└── biblioblitz.png
+├── biblioblitz.png
+└── py/
+    ├── app.py
+    ├── config.py
+    ├── utils.py
+    ├── dialogs.py
+    ├── splash.py
+    ├── tabs/
+    │   ├── tab_acquisition.py
+    │   ├── tab_statistics.py
+    │   └── tab_slr.py
+    └── engine/
+        ├── geo.py
+        ├── journals.py
+        ├── downloader.py
+        └── trends.py
 ```
 
 ```bash
@@ -119,13 +131,30 @@ Progress is logged in real time. A `download_log.csv` is written to the output d
 
 ## File Structure
 
-| File | Role |
-|---|---|
-| `main.py` | GUI controller — windows, dialogs, event wiring |
-| `core_engine.py` | API fetch logic, download pipeline, integrity sweep, trend charts |
-| `utils.py` | HTTP helpers, file download, filename sanitizer, UI utilities |
-| `config.py` | App constants, color palette, country list and ISO codes |
-| `states.csv` | Local source for sub-national administrative divisions |
+```
+BiblioBlitz/
+├── main.py                          # Entry point
+├── build_exe.bat                    # Windows build script
+├── BiblioBlitz_Setup.iss            # Inno Setup installer script
+├── states.csv                       # Sub-national administrative divisions
+├── biblioblitz.ico                  # App icon
+├── biblioblitz.png                  # App logo
+└── py/
+    ├── app.py                       # Main application window
+    ├── config.py                    # Constants, colors, country data
+    ├── utils.py                     # HTTP helpers, filename sanitizer, UI utilities
+    ├── dialogs.py                   # Reusable selector dialog widgets
+    ├── splash.py                    # Splash screen
+    ├── tabs/
+    │   ├── tab_acquisition.py       # Literature retrieval tab
+    │   ├── tab_statistics.py        # Live trend analysis tab
+    │   └── tab_slr.py               # Systematic review tab
+    └── engine/
+        ├── geo.py                   # Geographic filter and states lookup
+        ├── journals.py              # Journal fetch and filter logic
+        ├── downloader.py            # PDF download pipeline and integrity sweep
+        └── trends.py               # CrossRef/OpenAlex trend chart generation
+```
 
 ---
 
@@ -149,7 +178,7 @@ No API keys required. All services are accessed via public or polite-pool endpoi
 If you use BiblioBlitz in your research, please cite:
 
 ```
-Poddar, A. (2026). BiblioBlitz: Global Academic Knowledge Harvester & Literature Review Suite (v4.1).
+Poddar, A. & Bhattacharjee, S. (2026). BiblioBlitz: Global Academic Knowledge Harvester & Literature Review Suite (v4.1).
 Zenodo. https://doi.org/10.5281/zenodo.20469653
 ```
 
@@ -173,5 +202,7 @@ MIT License. See [`LICENSE`](LICENSE) for details.
 
 <p align="center">
   Developed by <strong>Ayanava Poddar</strong><br>
-  Junior Research Fellow, Department of Hydrology, IIT Roorkee
+  Junior Research Fellow and PhD Scholar, Department of Hydrology, IIT Roorkee<br>
+  <strong>Subhrajyoti Bhattacharjee</strong><br>
+  PhD Scholar, Department of Hydrology, IIT Roorkee
 </p>
