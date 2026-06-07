@@ -6,8 +6,8 @@
 <p align="center"><em>Global Academic Knowledge Harvester & Literature Review Suite</em></p>
 
 <p align="center">
-  <a href="https://doi.org/10.5281/zenodo.20469653">
-    <img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20469653-blue?style=flat-square&logo=zenodo" alt="DOI"/>
+  <a href="https://doi.org/10.5281/zenodo.20573666">
+    <img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20573666-blue?style=flat-square&logo=zenodo" alt="DOI"/>
   </a>
   &nbsp;
   <a href="https://github.com/Ayanava-23556003/BiblioBlitz/releases/download/v4.1/BiblioBlitz_Setup_v4.1.exe">
@@ -179,10 +179,10 @@ If you use BiblioBlitz in your research, please cite:
 
 ```
 Poddar, A. & Bhattacharjee, S. (2026). BiblioBlitz: Global Academic Knowledge Harvester & Literature Review Suite (v4.1).
-Zenodo. https://doi.org/10.5281/zenodo.20469653
+Zenodo. https://doi.org/10.5281/zenodo.20573666
 ```
 
-[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20469653-blue?style=flat-square&logo=zenodo)](https://doi.org/10.5281/zenodo.20469653)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20573666-blue?style=flat-square&logo=zenodo)](https://doi.org/10.5281/zenodo.20573666)
 
 ---
 
