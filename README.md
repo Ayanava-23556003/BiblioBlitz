@@ -55,7 +55,6 @@ BiblioBlitz is a desktop application for automated academic literature retrieval
 
 ### 🌍 Geographic Filtering
 - Select one or more **countries** — each expands into a separate geo-targeted API query
-- Cascading **state/region filter** loaded from a local `states.csv`, with live web fallback
 
 ### 📋 Journal Filtering
 - Fetches a live venue list from CrossRef, OpenAlex, PubMed, and CORE for your keyword set
@@ -89,7 +88,6 @@ Clone or download the repository and ensure the following structure is intact:
 ```
 BiblioBlitz/
 ├── main.py
-├── states.csv
 ├── biblioblitz.ico
 ├── biblioblitz.png
 └── py/
@@ -101,7 +99,6 @@ BiblioBlitz/
     ├── tabs/
     │   ├── tab_acquisition.py
     │   ├── tab_statistics.py
-    │   └── tab_slr.py
     └── engine/
         ├── geo.py
         ├── journals.py
@@ -148,7 +145,6 @@ BiblioBlitz/
     ├── tabs/
     │   ├── tab_acquisition.py       # Literature retrieval tab
     │   ├── tab_statistics.py        # Live trend analysis tab
-    │   └── tab_slr.py               # Systematic review tab
     └── engine/
         ├── geo.py                   # Geographic filter and states lookup
         ├── journals.py              # Journal fetch and filter logic
