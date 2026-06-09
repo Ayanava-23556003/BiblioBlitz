@@ -34,27 +34,29 @@ def build_acquisition_tab(app, parent):
 
     def field_label(text, hint=None):
         ctk.CTkLabel(left, text=text,
-                     font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ, weight="bold"),
+                     font=ctk.CTkFont(family=FONT_FAMILY,
+                                      size=FONT_LABEL_SZ, weight="bold"),
                      text_color=TEXT_BRIGHT).pack(anchor="w", padx=14, pady=(6, 1))
         if hint:
             ctk.CTkLabel(left, text=hint,
-                         font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ - 2),
+                         font=ctk.CTkFont(family=FONT_FAMILY,
+                                          size=FONT_ENTRY_SZ - 2),
                          text_color=TEXT_MID).pack(anchor="w", padx=14, pady=(0, 2))
 
     # Email
-    field_label("📧 User Handshake Email Connection String")
+    field_label("User Email (for API access only, not stored)")
     app._e_email = ctk.CTkEntry(
         left, height=36,
         font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ),
         fg_color=BG_ENTRY, border_color=BORDER_CLR, text_color=TEXT_BRIGHT)
     app._e_email.pack(fill="x", padx=14, pady=(0, 10))
-    _add_placeholder(app._e_email, "academic@university.edu")
+    _add_placeholder(app._e_email, "username@email.ext")
 
     # Download directory
-    field_label("📁 Target Download Folder Destination")
+    field_label("Download Repository")
     df = ctk.CTkFrame(left, fg_color="transparent")
     df.pack(fill="x", padx=14, pady=(0, 10))
-    app.v_dir = ctk.StringVar(value=str(Path.home() / "BiblioBlitz_Data"))
+    app.v_dir = ctk.StringVar(value=str(Path.home() / "Papers_Repo"))
     ctk.CTkEntry(
         df, textvariable=app.v_dir, height=36,
         font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ),
@@ -63,23 +65,29 @@ def build_acquisition_tab(app, parent):
     ctk.CTkButton(
         df, text="Browse...", width=90, height=36,
         fg_color=ACCENT_BLUE, text_color=BG_ROOT,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ, weight="bold"),
+        font=ctk.CTkFont(family=FONT_FAMILY,
+                         size=FONT_ENTRY_SZ, weight="bold"),
         command=app._browse_dir
     ).pack(side="right")
 
     # Keywords
-    field_label("🔍 Primary Search Keyword Filter String")
+    field_label(
+        "Search by Keywords",
+        hint="Use '&' for AND logic, '|' or ',' for OR logic across Title, Abstract & Keywords"
+    )
     app._e_keywords = ctk.CTkEntry(
         left, height=36,
         font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ),
         fg_color=BG_ENTRY, border_color=BORDER_CLR, text_color=TEXT_BRIGHT)
     app._e_keywords.pack(fill="x", padx=14, pady=(0, 8))
-    _add_placeholder(app._e_keywords, "e.g. soil erosion, rainfall runoff")
+    _add_placeholder(
+        app._e_keywords, "e.g. soil erosion & sediment  or  Climate change | CMIP6")
 
     # Fetch journals button
     app._btn_fetch_j = ctk.CTkButton(
-        left, text="🔎 Extract Mapped Publication Portals", height=34,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ, weight="bold"),
+        left, text="Extract Publication Portals", height=34,
+        font=ctk.CTkFont(family=FONT_FAMILY,
+                         size=FONT_ENTRY_SZ, weight="bold"),
         fg_color=BG_CARD, border_width=1, border_color=BORDER_CLR, text_color=TEXT_BRIGHT,
         command=app._fetch_journals_triggered)
     app._btn_fetch_j.pack(fill="x", padx=14, pady=(0, 4))
@@ -88,40 +96,10 @@ def build_acquisition_tab(app, parent):
         left, text="No active journal index logs generated.",
         font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
         text_color=TEXT_MID)
-    app._lbl_j_status.pack(anchor="w", padx=14, pady=(0, 4))
-
-    app._btn_select_j = ctk.CTkButton(
-        left, text="📋 Select Publication Venues Filter", height=34,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ, weight="bold"),
-        fg_color=BG_CARD, border_width=1, border_color=BORDER_CLR, text_color=TEXT_BRIGHT,
-        state="disabled", command=app._open_journal_ui)
-    app._btn_select_j.pack(fill="x", padx=14, pady=(0, 12))
-
-    # Countries
-    field_label("🌍 Filter Geographic Country Demographics")
-    app._btn_select_country = ctk.CTkButton(
-        left, text="Select Countries (Global Active)", height=34,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ, weight="bold"),
-        fg_color=BG_CARD, border_width=1, border_color=BORDER_CLR, text_color=TEXT_BRIGHT,
-        command=app._open_countries_ui)
-    app._btn_select_country.pack(fill="x", padx=14, pady=(0, 12))
-
-    # States (locked until country chosen)
-    field_label("🏛️ State / Administrative Division Bounds")
-    app._btn_select_st = ctk.CTkButton(
-        left, text="🔒 Select Country First to Unlock States", height=34,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ, weight="bold"),
-        fg_color=BG_CARD, border_width=1, border_color=BORDER_CLR, text_color=TEXT_DIM,
-        state="disabled", command=app._open_states_ui)
-    app._btn_select_st.pack(fill="x", padx=14, pady=(0, 4))
-    ctk.CTkLabel(
-        left, text="States load from the bundled global CSV catalogue.",
-        font=ctk.CTkFont(family=FONT_FAMILY, size=10), text_color=TEXT_MID
-    ).pack(anchor="w", padx=14, pady=(0, 12))
+    app._lbl_j_status.pack(anchor="w", padx=14, pady=(0, 12))
 
     # Max results
-    field_label("📦 Maximum Yield Dataset Record Limit")
-    import tkinter as tk
+    field_label("Maximum No. of Publications to Fetch")
     app.v_max = ctk.IntVar(value=1000)
     mf = ctk.CTkFrame(left, fg_color="transparent")
     mf.pack(fill="x", padx=14, pady=(0, 10))
@@ -133,8 +111,8 @@ def build_acquisition_tab(app, parent):
                   button_color=ACCENT_BLUE, progress_color=BORDER_CLR
                   ).pack(side="left", fill="x", expand=True)
 
-    # Min year
-    field_label("📅 Minimum Publication Year Lower Bound")
+    # Min year — starts at 1950 per requirements
+    field_label("Lower Bound of Publication Year")
     app.v_year = ctk.IntVar(value=2019)
     yf = ctk.CTkFrame(left, fg_color="transparent")
     yf.pack(fill="x", padx=14, pady=(0, 10))
@@ -142,7 +120,7 @@ def build_acquisition_tab(app, parent):
                  fg_color=BG_ENTRY, border_color=BORDER_CLR,
                  font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_ENTRY_SZ)
                  ).pack(side="left", padx=(0, 6))
-    ctk.CTkSlider(yf, from_=1995, to=2026, variable=app.v_year,
+    ctk.CTkSlider(yf, from_=1950, to=2026, variable=app.v_year,
                   button_color=ACCENT_BLUE, progress_color=BORDER_CLR
                   ).pack(side="left", fill="x", expand=True)
 
@@ -155,7 +133,8 @@ def build_acquisition_tab(app, parent):
     r_hdr.pack(fill="x", padx=14, pady=10)
     ctk.CTkLabel(
         r_hdr, text="Transaction Pipeline Output Ledger",
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ, weight="bold"),
+        font=ctk.CTkFont(family=FONT_FAMILY,
+                         size=FONT_LABEL_SZ, weight="bold"),
         text_color=TEXT_BRIGHT).pack(side="left")
     ctk.CTkButton(
         r_hdr, text="Flush Screen", width=100, height=26,
@@ -172,7 +151,8 @@ def build_acquisition_tab(app, parent):
 
     for tag, color in [
         ("step", "#457B9D"), ("info", "#1D3557"), ("success", "#2A9D8F"),
-        ("warn", "#D68C45"), ("error", "#E63946"), ("sep", BORDER_CLR), ("done", "#2A9D8F")
+        ("warn", "#D68C45"), ("error", "#E63946"), ("sep",
+                                                    BORDER_CLR), ("done", "#2A9D8F")
     ]:
         app._log.tag_config(tag, foreground=color)
 
@@ -192,29 +172,25 @@ def build_acquisition_tab(app, parent):
     b_row.pack(fill="x", padx=14, pady=12)
 
     app._btn_pdf = ctk.CTkButton(
-        b_row, text="📥 Download PDFs Only", height=38,
+        b_row, text="Download PDFs", height=38,
         fg_color=ACCENT_BLUE, text_color=BG_ENTRY,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ, weight="bold"),
+        font=ctk.CTkFont(family=FONT_FAMILY,
+                         size=FONT_LABEL_SZ, weight="bold"),
         command=lambda: app._start_download_pipeline("pdf"))
     app._btn_pdf.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
     app._btn_csv = ctk.CTkButton(
-        b_row, text="📊 Build CSV Index Mapping Only", height=38,
+        b_row, text="Download Metadata (CSV)", height=38,
         fg_color=ACCENT_PURP, text_color=BG_ENTRY,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ, weight="bold"),
+        font=ctk.CTkFont(family=FONT_FAMILY,
+                         size=FONT_LABEL_SZ, weight="bold"),
         command=lambda: app._start_download_pipeline("csv"))
-    app._btn_csv.pack(side="left", fill="x", expand=True, padx=(0, 4))
-
-    app._btn_both = ctk.CTkButton(
-        b_row, text="✨ Execute Download Both (PDF+CSV)", height=38,
-        fg_color=ACCENT_TEAL, text_color=BG_ENTRY,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ, weight="bold"),
-        command=lambda: app._start_download_pipeline("both"))
-    app._btn_both.pack(side="left", fill="x", expand=True, padx=(0, 6))
+    app._btn_csv.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
     app._btn_stop = ctk.CTkButton(
-        b_row, text="⏹ Kill", height=38, width=80,
+        b_row, text="STOP", height=38, width=80,
         fg_color="#E63946", text_color=BG_ENTRY,
-        font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ, weight="bold"),
+        font=ctk.CTkFont(family=FONT_FAMILY,
+                         size=FONT_LABEL_SZ, weight="bold"),
         state="disabled", command=app._stop_pipeline)
     app._btn_stop.pack(side="right")
