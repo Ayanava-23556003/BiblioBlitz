@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-app.py - BiblioBlitzApp Main Window and Controller
+app.py - BiblioBlitzApp Main Window and Controller (v4.2)
 """
 
 import sys
 import ctypes
 import threading
+import os
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -26,19 +27,17 @@ from py.config import (
 from py.utils import bind_mouse_wheel, _get_val
 from py.dialogs import (
     GenericSelectorDialog, GroupedJournalSelectorDialog,
-    YesNoDialog, ResultsTableDialog
+    YesNoDialog, ConfirmCloseDialog, ResultsTableDialog
 )
 from py.tabs.tab_acquisition import build_acquisition_tab
 from py.tabs.tab_statistics import build_statistics_tab
 from py.engine.journals import fetch_journals_for_keywords
 from py.engine.downloader import run_download
-from py.engine.trends import compile_live_api_trends
+from py.engine.trends import compile_csv_trends
 
 
 def resource_path(filename):
-    import os
-    base_dir = getattr(sys, "_MEIPASS", os.path.dirname(
-        os.path.abspath(__file__)))
+    base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_dir, filename)
 
 
@@ -62,24 +61,26 @@ class BiblioBlitzApp(ctk.CTk):
         self._running = False
         self._stop_event = threading.Event()
 
+        # These are populated fresh at each download via the popup chain
         self._selected_journals = []
         self._fetched_journals = []
         self._selected_countries = []
 
-        # Stored after pipeline completes
         self._last_results = []
-        self._last_country_data = []
+        self._last_csv_path = None   # path of the last saved metadata CSV
 
         self._load_icon()
         self._build_ui_shell()
 
+        # Always ask before closing
+        self.protocol("WM_DELETE_WINDOW", self._on_close_requested)
+
     # ── Icon ──────────────────────────────────────────────────────────────────
 
     def _load_icon(self):
-        import os
         try:
             ico_path = resource_path("biblioblitz.ico")
-            p_path = resource_path("biblioblitz.png")
+            p_path   = resource_path("biblioblitz.png")
             if os.path.exists(ico_path):
                 self.iconbitmap(ico_path)
             if os.path.exists(p_path):
@@ -88,34 +89,45 @@ class BiblioBlitzApp(ctk.CTk):
         except Exception:
             pass
 
+    # ── Close warning — always shown ──────────────────────────────────────────
+
+    def _on_close_requested(self):
+        """
+        Always confirm before closing.
+        If a download is running, show the abort-warning variant.
+        Otherwise show a simple 'sure you want to quit?' prompt.
+        """
+        dlg = ConfirmCloseDialog(self, download_running=self._running)
+        self.wait_window(dlg)
+        if not dlg.result:
+            return
+        if self._running:
+            self._stop_event.set()
+        self.destroy()
+
     # ── Shell ─────────────────────────────────────────────────────────────────
 
     def _build_ui_shell(self):
-        hdr = ctk.CTkFrame(self, fg_color=BG_HEADER,
-                           height=70, corner_radius=0)
+        hdr = ctk.CTkFrame(self, fg_color=BG_HEADER, height=70, corner_radius=0)
         hdr.pack(fill="x", side="top")
 
         lbl_f = ctk.CTkFrame(hdr, fg_color="transparent")
         lbl_f.pack(side="left", padx=16, pady=8)
         ctk.CTkLabel(lbl_f, text=APP_NAME,
-                     font=ctk.CTkFont(family=FONT_FAMILY,
-                                      size=24, weight="bold"),
+                     font=ctk.CTkFont(family=FONT_FAMILY, size=24, weight="bold"),
                      text_color=BORDER_CLR).pack(anchor="w")
         ctk.CTkLabel(lbl_f, text=APP_TAGLINE,
-                     font=ctk.CTkFont(family=FONT_FAMILY,
-                                      size=11, weight="bold"),
+                     font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
                      text_color=TEXT_MID).pack(anchor="w")
 
         z_f = ctk.CTkFrame(hdr, fg_color="transparent")
         z_f.pack(side="right", padx=16, pady=12)
         ctk.CTkButton(z_f, text="🔍 Zoom In (+)", width=110, height=32,
-                      font=ctk.CTkFont(family=FONT_FAMILY,
-                                       size=11, weight="bold"),
+                      font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
                       fg_color=ACCENT_BLUE,
                       command=lambda: self._apply_ui_zoom(0.1)).pack(side="left", padx=4)
         ctk.CTkButton(z_f, text="🔍 Zoom Out (-)", width=110, height=32,
-                      font=ctk.CTkFont(family=FONT_FAMILY,
-                                       size=11, weight="bold"),
+                      font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
                       fg_color=ACCENT_BLUE,
                       command=lambda: self._apply_ui_zoom(-0.1)).pack(side="left", padx=4)
 
@@ -126,7 +138,7 @@ class BiblioBlitzApp(ctk.CTk):
             text_color=TEXT_BRIGHT)
         self.tabs.pack(fill="both", expand=True, padx=14, pady=5)
 
-        tab_acq = self.tabs.add("Data Acquisition Platform")
+        tab_acq   = self.tabs.add("Data Acquisition Platform")
         tab_stats = self.tabs.add("Scholarly Trend Statistics")
 
         build_acquisition_tab(self, tab_acq)
@@ -146,55 +158,6 @@ class BiblioBlitzApp(ctk.CTk):
         if d:
             self.v_dir.set(d)
 
-    def _prompt_global_or_country(self):
-        dlg = YesNoDialog(self, "Country Scope",
-                          "Search globally (all countries)?")
-        self.wait_window(dlg)
-        if dlg.result:
-            self._selected_countries = []
-            self._btn_select_country.configure(
-                text="Select Countries (Global Active)")
-        else:
-            country_options = [c for c in COUNTRIES if c !=
-                               "Global (All Countries)"]
-            sel_dlg = GenericSelectorDialog(
-                self, "Select Countries For Title Search",
-                country_options, self._selected_countries)
-            self.wait_window(sel_dlg)
-            self._selected_countries = sel_dlg.get_selected()
-            self._btn_select_country.configure(
-                text=(f"Countries Active ({len(self._selected_countries)})"
-                      if self._selected_countries
-                      else "Select Countries (Global Active)"))
-
-    def _prompt_journal_filter(self):
-        if not self._fetched_journals:
-            messagebox.showinfo(
-                "No Journals Loaded",
-                "Click 'Extract Publication Portals' first to load journals.")
-            return
-        dlg = YesNoDialog(self, "Journal Filter",
-                          "Filter results by specific journals?")
-        self.wait_window(dlg)
-        if dlg.result:
-            self._open_journal_ui()
-        else:
-            self._selected_journals = []
-            self._btn_select_j.configure(
-                text="Filter by Journals (None — All Journals)")
-
-    def _open_journal_ui(self):
-        if not self._fetched_journals:
-            return
-        dlg = GroupedJournalSelectorDialog(
-            self, "Filter Mapped Target Journals Matrix",
-            self._fetched_journals, self._selected_journals)
-        self.wait_window(dlg)
-        self._selected_journals = dlg.get_selected()
-        self._btn_select_j.configure(
-            text=f"Journals Active ({len(self._selected_journals)} selected)"
-            if self._selected_journals else "Filter by Journals (None — All Journals)")
-
     def _clear_log(self):
         self._log.configure(state="normal")
         self._log.delete("1.0", "end")
@@ -211,11 +174,9 @@ class BiblioBlitzApp(ctk.CTk):
     def _fetch_journals_triggered(self):
         kw = _get_val(self._e_keywords)
         if not kw:
-            self._append_log(
-                "[ALERT] Provide search keywords before fetching journals.", "error")
+            self._append_log("[ALERT] Provide search keywords before fetching journals.", "error")
             return
-        self._btn_fetch_j.configure(
-            state="disabled", text="⚡ Processing Web Schemas...")
+        self._btn_fetch_j.configure(state="disabled", text="⚡ Processing Web Schemas...")
 
         def _async_run():
             res = fetch_journals_for_keywords(kw, self._append_log)
@@ -226,23 +187,32 @@ class BiblioBlitzApp(ctk.CTk):
                     state="normal", text="Extract Publication Portals")
                 self._lbl_j_status.configure(
                     text=f"✅ {len(res)} source options loaded.", text_color=ACCENT_TEAL)
-                self._btn_select_j.configure(state="normal")
             self.after(0, _ui_sync)
 
         threading.Thread(target=_async_run, daemon=True).start()
 
+    # ── Download pipeline with popup chain ───────────────────────────────────
+
     def _start_download_pipeline(self, mode):
+        """
+        Entry point for both download buttons.
+        Runs the popup chain on the main thread, then kicks off the
+        background worker once the user has confirmed all selections.
+        """
         kw = _get_val(self._e_keywords)
         if not kw:
-            self._append_log(
-                "[ALERT] Execution aborted. Write your search terms first.", "error")
-            messagebox.showerror("Form Input Error",
-                                 "Core search terms cannot remain unassigned.")
+            self._append_log("[ALERT] Execution aborted. Write your search terms first.", "error")
+            messagebox.showerror("Form Input Error", "Core search terms cannot remain unassigned.")
             return
         email = _get_val(self._e_email)
         if not email or "@" not in email:
-            messagebox.showerror("Form Input Error",
-                                 "Input a valid email identifier.")
+            messagebox.showerror("Form Input Error", "Input a valid email identifier.")
+            return
+
+        # Run the blocking popup chain on the main thread
+        # (safe because we haven't started the download thread yet)
+        if not self._run_filter_popup_chain():
+            # User cancelled somewhere in the chain
             return
 
         self._clear_log()
@@ -261,59 +231,161 @@ class BiblioBlitzApp(ctk.CTk):
             log_cb=self._append_log,
             stop_event=self._stop_event,
         )
-        threading.Thread(target=self._pipeline_executor,
-                         kwargs=params, daemon=True).start()
+        threading.Thread(target=self._pipeline_executor, kwargs=params, daemon=True).start()
+
+    def _run_filter_popup_chain(self):
+        """
+        Sequential modal popup chain called before every download.
+
+        Step 1 — Journal filter
+          Yes → open journal multi-select window
+          No  → use all journals
+
+        Step 2 — Country scope
+          Yes → open country multi-select window
+          No  → global (no country filter)
+
+        Returns True if the user completed the chain, False if they cancelled.
+        """
+        # ── Step 1: Journal filter ────────────────────────────────────────────
+        jdlg = YesNoDialog(
+            self,
+            "Journal Filter",
+            "Would you like to filter results by specific journals?\n\n"
+            "Yes → select journals\n"
+            "No  → include all journals"
+        )
+        self.wait_window(jdlg)
+        # jdlg.result is None if user closed the window without choosing
+        if jdlg.result is None:
+            return False
+
+        if jdlg.result:
+            # Open journal multi-select
+            if not self._fetched_journals:
+                messagebox.showinfo(
+                    "No Journals Available",
+                    "No journal list has been loaded yet.\n"
+                    "Click 'Extract Publication Portals' first, then try again.")
+                return False
+            sel_j = GroupedJournalSelectorDialog(
+                self, "Select Target Journals",
+                self._fetched_journals, self._selected_journals)
+            self.wait_window(sel_j)
+            self._selected_journals = sel_j.get_selected()
+            self._append_log(
+                f"[FILTER] Journals selected: "
+                f"{len(self._selected_journals) if self._selected_journals else 'All'}", "step")
+        else:
+            self._selected_journals = []
+            self._append_log("[FILTER] Journal filter: All journals included.", "step")
+
+        # ── Step 2: Country scope ─────────────────────────────────────────────
+        cdlg = YesNoDialog(
+            self,
+            "Country / Region Scope",
+            "Would you like to restrict results to specific countries?\n\n"
+            "Yes → select countries\n"
+            "No  → global search (all countries)"
+        )
+        self.wait_window(cdlg)
+        if cdlg.result is None:
+            return False
+
+        if cdlg.result:
+            country_options = [c for c in COUNTRIES if c != "Global (All Countries)"]
+            sel_c = GenericSelectorDialog(
+                self, "Select Countries",
+                country_options, self._selected_countries)
+            self.wait_window(sel_c)
+            self._selected_countries = sel_c.get_selected()
+            self._append_log(
+                f"[FILTER] Countries selected: "
+                f"{', '.join(self._selected_countries) if self._selected_countries else 'All'}", "step")
+        else:
+            self._selected_countries = []
+            self._append_log("[FILTER] Country scope: Global (all countries).", "step")
+
+        return True
+
+    # ── Pipeline executor (background thread) ─────────────────────────────────
 
     def _pipeline_executor(self, **kwargs):
         try:
             results = run_download(**kwargs)
             if results:
                 self._last_results = results
-                self._last_country_data = [
-                    r.get("Country", "") for r in results if r.get("Country")
-                ]
-                self.after(0, self._auto_trigger_stats)
+
+                # Find the saved CSV path from the download dir
+                download_dir = kwargs.get("download_dir", "")
+                self._locate_and_load_csv(download_dir)
+
                 self.after(400, self._show_results_table)
         except Exception as e:
-            self._append_log(
-                f"[CRITICAL ERR] Processing interrupted: {e}", "error")
+            self._append_log(f"[CRITICAL ERR] Processing interrupted: {e}", "error")
         finally:
             self._set_ui_state(False)
 
-    def _auto_trigger_stats(self):
+    def _locate_and_load_csv(self, download_dir):
         """
-        After download completes:
-        1. Copy acquisition keywords + year into the stats tab fields.
-        2. Switch to the stats tab.
-        3. Fire the trend generator.
+        After a download finishes, find the most recently modified .csv
+        in the download dir and automatically feed it to the stats engine.
         """
-        kw = _get_val(self._e_keywords)
-        if not kw:
+        import glob, time
+
+        if not download_dir or not os.path.isdir(download_dir):
+            self.after(0, lambda: self._update_stat_notice(
+                "Download complete — upload the saved CSV to generate charts.", "info"))
             return
 
-        # Push keywords and year into stats tab inputs
-        try:
-            self._e_stat_kw.delete(0, "end")
-            self._e_stat_kw.insert(0, kw)
-        except Exception:
-            pass
-        try:
-            self._e_stat_yr.delete(0, "end")
-            self._e_stat_yr.insert(0, str(self.v_year.get()))
-        except Exception:
-            pass
+        csv_files = glob.glob(os.path.join(download_dir, "*.csv"))
+        if not csv_files:
+            self.after(0, lambda: self._update_stat_notice(
+                "No CSV found in the download folder. Upload manually.", "warn"))
+            return
 
+        # Pick the most recently modified csv
+        latest = max(csv_files, key=os.path.getmtime)
+        self._last_csv_path = latest
+
+        from pathlib import Path as _P
+        self._append_log(f"[STATS] Auto-loading CSV: {_P(latest).name}", "step")
+
+        # Switch to stats tab and render
+        self.after(0, self._auto_load_csv_to_stats)
+
+    def _auto_load_csv_to_stats(self):
+        if not self._last_csv_path:
+            return
+        from pathlib import Path as _P
         self.tabs.set("Scholarly Trend Statistics")
-        self._trigger_live_trends_async()
+        self._lbl_csv_file.configure(text=f"Loaded: {_P(self._last_csv_path).name}")
+        self._update_stat_notice("Rendering charts from downloaded metadata…", "info")
+        self._btn_calc_trends.configure(state="disabled", text="⚡ Parsing metadata CSV...")
+
+        def _worker():
+            try:
+                compile_csv_trends(
+                    self._last_csv_path,
+                    self._charts_scroll_box,
+                    self._update_stat_notice,
+                    render_cb=lambda fig: self.after(0, lambda f=fig: self._draw_chart(f)),
+                )
+            except Exception as e:
+                self._update_stat_notice(f"Error rendering charts: {e}", "error")
+            finally:
+                self.after(0, lambda: self._btn_calc_trends.configure(
+                    state="normal", text="📂 Upload CSV & Generate Charts"))
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _show_results_table(self):
         if self._last_results:
-            ResultsTableDialog(self, self._last_results)
+            self.after(10, lambda: ResultsTableDialog(self, self._last_results))
 
     def _stop_pipeline(self):
         self._stop_event.set()
-        self._append_log(
-            "[KILL CALL] Sending shutdown signals across current process loops.", "warn")
+        self._append_log("[KILL CALL] Sending shutdown signals across current process loops.", "warn")
 
     def _set_ui_state(self, is_running):
         self._running = is_running
@@ -331,68 +403,47 @@ class BiblioBlitzApp(ctk.CTk):
 
     def _update_stat_notice(self, msg, tag="info"):
         color = ACCENT_TEAL if tag in ("success", "done") else (
-            "#E63946" if tag == "error" else ACCENT_BLUE)
+            "#E63946" if tag == "error" else
+            "#D68C45" if tag == "warn" else ACCENT_BLUE)
         self.after(0, lambda: self._lbl_stat_notice.configure(
             text=f"Status: {msg}", text_color=color))
 
-    def _trigger_live_trends_async(self):
-        """
-        Resolve keywords: prefer stats tab entry if filled,
-        otherwise fall back to the acquisition tab keywords.
-        Year: prefer stats tab entry, else acquisition year.
-        """
-        kw = _get_val(self._e_stat_kw)
-        if not kw:
-            # Fall back to acquisition keywords
-            kw = _get_val(self._e_keywords)
-
-        if not kw:
-            messagebox.showerror(
-                "No Keywords",
-                "Enter keywords in the Acquisition tab first, or type them in the stats bar.")
+    def _trigger_csv_trends(self):
+        """Manual CSV upload from the Statistics tab."""
+        path = filedialog.askopenfilename(
+            title="Select BiblioBlitz Metadata CSV",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        if not path:
             return
 
-        try:
-            yr_raw = self._e_stat_yr.get().strip()
-            yr = int(yr_raw) if yr_raw else int(self.v_year.get())
-        except Exception:
-            yr = 2018
+        from pathlib import Path as _P
+        self._last_csv_path = path
+        self._lbl_csv_file.configure(text=f"Loaded: {_P(path).name}")
+        self._btn_calc_trends.configure(state="disabled", text="⚡ Parsing metadata CSV...")
 
-        # Sync the stats entry box so the user can see what's running
-        try:
-            self._e_stat_kw.delete(0, "end")
-            self._e_stat_kw.insert(0, kw)
-        except Exception:
-            pass
-
-        self._btn_calc_trends.configure(
-            state="disabled", text="⚡ Harvesting metadata worldwide...")
-
-        country_snapshot = list(self._last_country_data)
-
-        def _draw_chart(fig):
-            for w in self._charts_scroll_box.winfo_children():
-                w.destroy()
-            if FigureCanvasTkAgg:
-                canvas = FigureCanvasTkAgg(fig, master=self._charts_scroll_box)
-                canvas.draw()
-                canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)
-
-        def _async_worker():
+        def _worker():
             try:
-                compile_live_api_trends(
-                    kw, yr,
+                compile_csv_trends(
+                    path,
                     self._charts_scroll_box,
                     self._update_stat_notice,
-                    render_cb=lambda fig: self.after(
-                        0, lambda: _draw_chart(fig)),
-                    country_data=country_snapshot if country_snapshot else None
+                    render_cb=lambda fig: self.after(0, lambda f=fig: self._draw_chart(f)),
                 )
             except Exception as e:
-                self._update_stat_notice(
-                    f"Error compiling graphs: {e}", "error")
+                self._update_stat_notice(f"Error compiling graphs: {e}", "error")
             finally:
                 self.after(0, lambda: self._btn_calc_trends.configure(
-                    state="normal", text="Generate Worldwide Trend Graphs"))
+                    state="normal", text="📂 Upload CSV & Generate Charts"))
 
-        threading.Thread(target=_async_worker, daemon=True).start()
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _draw_chart(self, fig):
+        """Embed a matplotlib Figure inside the scrollable chart area."""
+        # Clear old content (placeholder + previous charts)
+        for w in self._charts_scroll_box.winfo_children():
+            w.destroy()
+        if FigureCanvasTkAgg:
+            canvas = FigureCanvasTkAgg(fig, master=self._charts_scroll_box)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)

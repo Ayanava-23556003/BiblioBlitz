@@ -4,7 +4,7 @@ config.py - Configuration management file for BiblioBlitz v4.1
 """
 
 APP_NAME = "BiblioBlitz"
-APP_VER = "v4.1"
+APP_VER = "v4.2"
 APP_TAGLINE = "Global Academic Knowledge Harvester & Literature Review Suite"
 
 # ── Country data ─────────────────────────────────────────────────────────────

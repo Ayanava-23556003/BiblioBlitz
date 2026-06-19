@@ -17,19 +17,30 @@ from py.config import (
 from py.utils import bind_mouse_wheel
 
 
+def _raise_window(win):
+    """Force a CTkToplevel to appear on top and grab focus reliably."""
+    win.lift()
+    win.attributes("-topmost", True)
+    win.after(50, lambda: win.attributes("-topmost", False))
+    win.focus_force()
+
+
 # ── YesNoDialog ───────────────────────────────────────────────────────────────
 
 class YesNoDialog(ctk.CTkToplevel):
-    """Simple Yes / No prompt. Read result via .result (True = Yes, False = No)."""
+    """
+    Simple Yes / No prompt.
+    .result = True (Yes), False (No), None (closed without choosing).
+    """
 
     def __init__(self, parent, title_text, message):
         super().__init__(parent)
         self.title(title_text)
-        self.geometry("380x170")
+        self.geometry("420x210")
         self.resizable(False, False)
         self.configure(fg_color=BG_PANEL)
-        self.grab_set()
-        self.result = False
+        self.result = None
+        self.protocol("WM_DELETE_WINDOW", self._cancelled)
 
         try:
             if hasattr(parent, '_icon_img'):
@@ -60,12 +71,19 @@ class YesNoDialog(ctk.CTkToplevel):
             command=self._no
         ).pack(side="left", expand=True, fill="x")
 
+        self.grab_set()
+        self.after(10, lambda: _raise_window(self))
+
     def _yes(self):
         self.result = True
         self.destroy()
 
     def _no(self):
         self.result = False
+        self.destroy()
+
+    def _cancelled(self):
+        self.result = None
         self.destroy()
 
 
@@ -77,7 +95,6 @@ class GenericSelectorDialog(ctk.CTkToplevel):
         self.title(title_text)
         self.geometry("520x600")
         self.configure(fg_color=BG_PANEL)
-        self.grab_set()
 
         try:
             if hasattr(parent, '_icon_img'):
@@ -90,6 +107,9 @@ class GenericSelectorDialog(ctk.CTkToplevel):
                       for c in current_selections if c in items_list}
         self._last_q = None
         self._build()
+
+        self.grab_set()
+        self.after(10, lambda: _raise_window(self))
 
     def _var_for(self, item):
         if item not in self._vars:
@@ -171,7 +191,6 @@ class GroupedJournalSelectorDialog(ctk.CTkToplevel):
         self.geometry("780x580")
         self.minsize(640, 460)
         self.configure(fg_color=BG_PANEL)
-        self.grab_set()
 
         try:
             if hasattr(parent, '_icon_img'):
@@ -192,6 +211,9 @@ class GroupedJournalSelectorDialog(ctk.CTkToplevel):
         self._selected = []
 
         self._build()
+
+        self.grab_set()
+        self.after(10, lambda: _raise_window(self))
 
     def _build(self):
         search_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -329,6 +351,78 @@ class GroupedJournalSelectorDialog(ctk.CTkToplevel):
         return getattr(self, "_selected", [])
 
 
+# ── ConfirmCloseDialog ────────────────────────────────────────────────────────
+
+class ConfirmCloseDialog(ctk.CTkToplevel):
+    """
+    Exit confirmation dialog.
+    Shows a stronger warning when download_running=True.
+    .result = True means confirmed exit.
+    """
+
+    def __init__(self, parent, download_running=False):
+        super().__init__(parent)
+        self.title("Confirm Exit")
+        self.geometry("420x200")
+        self.resizable(False, False)
+        self.configure(fg_color=BG_PANEL)
+        self.result = False
+
+        try:
+            if hasattr(parent, '_icon_img'):
+                self.wm_iconphoto(True, parent._icon_img)
+        except Exception:
+            pass
+
+        if download_running:
+            msg = ("⚠  A download pipeline is still running.\n"
+                   "Closing now will abort the current job and\n"
+                   "any progress will be lost.\n\n"
+                   "Are you sure you want to exit?")
+            exit_btn_color = "#E63946"
+            exit_btn_text  = "Abort & Exit"
+            cancel_text    = "Keep Running"
+        else:
+            msg = "Are you sure you want to close BiblioBlitz?"
+            exit_btn_color = ACCENT_BLUE
+            exit_btn_text  = "Exit"
+            cancel_text    = "Cancel"
+
+        ctk.CTkLabel(
+            self, text=msg,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ),
+            text_color=TEXT_BRIGHT, wraplength=380, justify="center"
+        ).pack(padx=20, pady=(24, 16))
+
+        btn_row = ctk.CTkFrame(self, fg_color="transparent")
+        btn_row.pack(padx=20, pady=(0, 20), fill="x")
+
+        ctk.CTkButton(
+            btn_row, text=exit_btn_text,
+            fg_color=exit_btn_color, text_color=BG_ENTRY,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ, weight="bold"),
+            command=self._confirm
+        ).pack(side="left", expand=True, fill="x", padx=(0, 6))
+
+        ctk.CTkButton(
+            btn_row, text=cancel_text,
+            fg_color=ACCENT_TEAL, text_color=BG_ENTRY,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=FONT_LABEL_SZ, weight="bold"),
+            command=self._cancel
+        ).pack(side="left", expand=True, fill="x")
+
+        self.grab_set()
+        self.after(10, lambda: _raise_window(self))
+
+    def _confirm(self):
+        self.result = True
+        self.destroy()
+
+    def _cancel(self):
+        self.result = False
+        self.destroy()
+
+
 # ── ResultsTableDialog ────────────────────────────────────────────────────────
 
 class ResultsTableDialog(ctk.CTkToplevel):
@@ -373,6 +467,9 @@ class ResultsTableDialog(ctk.CTkToplevel):
         self._records = records
         self._build(records)
 
+        self.grab_set()
+        self.after(10, lambda: _raise_window(self))
+
     def _build(self, records):
         # ── Top bar: search + export count ──────────────────────────────────
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -408,7 +505,6 @@ class ResultsTableDialog(ctk.CTkToplevel):
         tree_frame = tk.Frame(self, bg=BG_CARD)
         tree_frame.pack(fill="both", expand=True, padx=14, pady=(0, 12))
 
-        # Style
         style = ttk.Style()
         style.theme_use("default")
         style.configure(
@@ -445,17 +541,14 @@ class ResultsTableDialog(ctk.CTkToplevel):
         xscroll.pack(side="bottom", fill="x")
         self._tree.pack(fill="both", expand=True)
 
-        # Column definitions — all resizable via drag
         for col in self.COLUMNS:
             self._tree.heading(col, text=col,
                                command=lambda c=col: self._sort_by(c, False))
             self._tree.column(col, width=self.COL_WIDTHS.get(col, 120),
                               minwidth=50, stretch=True)
 
-        # Populate
         self._populate(records)
 
-        # Bindings
         self._tree.bind("<ButtonRelease-1>",  self._on_click)
         self._tree.bind("<Double-Button-1>",  self._on_double_click)
 
@@ -489,7 +582,6 @@ class ResultsTableDialog(ctk.CTkToplevel):
 
     def _on_click(self, event):
         col_id = self._tree.identify_column(event.x)
-        # col_id is "#1", "#2", etc. — 1-based
         try:
             col_idx = int(col_id.replace("#", "")) - 1
         except ValueError:
@@ -513,7 +605,6 @@ class ResultsTableDialog(ctk.CTkToplevel):
             webbrowser.open(f"https://doi.org/{doi}")
 
     def _sort_by(self, col, reverse):
-        """Click column header to sort."""
         data = [
             (self._tree.set(child, col), child)
             for child in self._tree.get_children("")
